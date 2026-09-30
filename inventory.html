@@ -1,0 +1,1260 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>첫맛 재고 트래커</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%A6%3C/text%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f7f8;
+    --surface: #ffffff;
+    --surface-sunken: #f0f0f2;
+    --ink: #1a1a1e;
+    --ink-soft: #55555c;
+    --ink-faint: #8a8a92;
+    --border: #e2e2e6;
+    --border-strong: #c9c9cf;
+    --accent: #2f5fa8;
+    --accent-2: #55565c;
+    --accent-soft: #e8eef8;
+    --ok: #1e7a42;
+    --ok-soft: #e6f3ea;
+    --warn: #a15c00;
+    --warn-soft: #fbeedd;
+    --danger: #ab2a2a;
+    --danger-soft: #fbe7e7;
+    --info: #4b4fb0;
+    --info-soft: #eaeafa;
+    --shadow-sm: 0 1px 2px rgba(20,20,25,0.05);
+    --shadow: 0 1px 2px rgba(20,20,25,0.05), 0 1px 4px rgba(20,20,25,0.06);
+    --shadow-lift: 0 2px 4px rgba(20,20,25,0.06), 0 4px 10px rgba(20,20,25,0.08);
+    --radius: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #151517; --surface: #1c1c1f; --surface-sunken: #242427;
+      --ink: #e9e9eb; --ink-soft: #adadb4; --ink-faint: #77777e; --border: #313136; --border-strong: #434349;
+      --accent: #6f9adb; --accent-2: #9a9aa2; --accent-soft: #212a38;
+      --ok: #6fbc8a; --ok-soft: #1c2921; --warn: #d19a4f; --warn-soft: #2f2416;
+      --danger: #d98686; --danger-soft: #302020;
+      --info: #9b9de0; --info-soft: #24243a;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.35);
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.4);
+      --shadow-lift: 0 2px 4px rgba(0,0,0,0.35), 0 4px 10px rgba(0,0,0,0.45);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #151517; --surface: #1c1c1f; --surface-sunken: #242427;
+    --ink: #e9e9eb; --ink-soft: #adadb4; --ink-faint: #77777e; --border: #313136; --border-strong: #434349;
+    --accent: #6f9adb; --accent-2: #9a9aa2; --accent-soft: #212a38;
+    --ok: #6fbc8a; --ok-soft: #1c2921; --warn: #d19a4f; --warn-soft: #2f2416;
+    --danger: #d98686; --danger-soft: #302020;
+    --info: #9b9de0; --info-soft: #24243a;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.35);
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.4);
+    --shadow-lift: 0 2px 4px rgba(0,0,0,0.35), 0 4px 10px rgba(0,0,0,0.45);
+  }
+
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Noto Sans KR", "Malgun Gothic", sans-serif;
+    font-size: 14.5px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+  .mono { font-family: "Inter", "Noto Sans KR", sans-serif; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; font-weight: 500; }
+  ::selection { background: var(--accent-soft); }
+  button { font-family: inherit; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  #login-screen {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center; z-index: 100;
+  }
+  .login-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 40px 34px; width: 320px; box-shadow: var(--shadow);
+  }
+  .login-card h1 { font-size: 20px; margin: 0 0 5px; letter-spacing: -0.01em; }
+  .login-card p { font-size: 12.5px; color: var(--ink-faint); margin: 0 0 22px; }
+  .login-card input {
+    width: 100%; padding: 11px 13px; margin-bottom: 10px; border-radius: 9px;
+    border: 1.5px solid var(--border); background: var(--surface-sunken); color: var(--ink); font-size: 14px;
+    transition: border-color .15s;
+  }
+  .login-card input:focus { border-color: var(--accent); outline: none; }
+  .login-card button {
+    width: 100%; padding: 11px; border-radius: 9px; border: none;
+    background: var(--accent); color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; margin-top: 8px;
+    letter-spacing: 0.01em; transition: filter .15s, transform .1s;
+  }
+  .login-card button:hover { filter: brightness(1.08); }
+  .login-card button:active { transform: translateY(1px); }
+  #login-error { color: var(--danger); font-size: 12.5px; margin-top: 8px; display: none; }
+
+  #app { display: none; }
+  .wrap { max-width: 1440px; margin: 0 auto; padding: 32px 28px 90px; }
+
+  header.top { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 26px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+  header.top .brand { display: flex; align-items: center; gap: 11px; }
+  header.top .brand-mark {
+    width: 36px; height: 36px; border-radius: 10px; flex: 0 0 auto;
+    background: linear-gradient(155deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--accent-2)));
+    display: flex; align-items: center; justify-content: center; font-size: 17px; box-shadow: var(--shadow-sm);
+  }
+  header.top h1 { font-size: 21px; margin: 0; letter-spacing: -0.01em; }
+  header.top .sub { font-size: 12px; color: var(--ink-faint); margin-top: 3px; }
+  .logout-btn {
+    font-size: 12px; color: var(--ink-soft); background: var(--surface); border: 1px solid var(--border);
+    border-radius: 100px; padding: 6px 14px; cursor: pointer; transition: background .15s, border-color .15s;
+  }
+  .logout-btn:hover { background: var(--surface-sunken); border-color: var(--border-strong); }
+
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+  .tab-btn {
+    padding: 11px 18px; font-size: 14px; font-weight: 500; color: var(--ink-faint);
+    background: none; border: none; border-bottom: 2.5px solid transparent; cursor: pointer; margin-bottom: -1px;
+    transition: color .15s, border-color .15s;
+  }
+  .tab-btn:hover { color: var(--ink-soft); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 700; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; animation: fade-in .25s ease; }
+  @keyframes fade-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+
+  .stat-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 22px; }
+  .stat {
+    position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px 16px 20px;
+    box-shadow: var(--shadow); cursor: pointer; text-align: left; font-family: inherit; overflow: hidden;
+    transition: box-shadow .15s, transform .15s, border-color .15s;
+  }
+  .stat::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--tone, var(--ink-faint)); opacity: .55; }
+  .stat:hover { box-shadow: var(--shadow-lift); transform: translateY(-1px); }
+  .stat .label { font-size: 11.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+  .stat .value { font-family: "Inter", "Noto Sans KR", sans-serif; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; font-size: 26px; font-weight: 700; margin-top: 5px; }
+  .stat.active { border-color: var(--tone, var(--accent)); box-shadow: var(--shadow-lift); }
+  .stat.active::before { opacity: 1; }
+  @media (max-width: 720px) { .stat-row { grid-template-columns: repeat(2,1fr); } }
+
+  .health-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 16px 22px; margin-bottom: 22px; display: flex; align-items: center; gap: 22px;
+  }
+  .health-card:empty { display: none; }
+  .health-legend { display: flex; flex-direction: column; gap: 7px; font-size: 13px; color: var(--ink-soft); }
+  .health-legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; }
+  .health-legend .n { font-family: "Inter", "Noto Sans KR", sans-serif; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--ink); }
+  .health-issues { flex: 1 1 260px; display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--ink-soft); border-left: 1px solid var(--border); padding-left: 20px; }
+  .issue-line .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
+  .issue-name { background: none; border: none; padding: 0; margin: 0; font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+  .issue-name:hover { color: var(--ink); }
+  .lot-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin: 0 0 5px; background: var(--surface-sunken); min-width: 80px; max-width: 160px; }
+  .lot-bar span { display: block; }
+
+  .brand-row { display: flex; gap: 6px; margin-bottom: 18px; }
+  .brand-btn {
+    font-size: 13px; font-weight: 600; padding: 8px 18px; border-radius: 9px;
+    border: 1.5px solid var(--border); background: var(--surface); color: var(--ink-soft); cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s;
+  }
+  .brand-btn:hover { border-color: var(--border-strong); }
+  .brand-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+  .search-input {
+    flex: 1; min-width: 180px; padding: 9px 13px; border-radius: 9px; border: 1.5px solid var(--border);
+    background: var(--surface); color: var(--ink); font-size: 13.5px; transition: border-color .15s;
+  }
+  .search-input:focus { border-color: var(--accent); outline: none; }
+  .filter-chip {
+    font-size: 12.5px; font-weight: 600; padding: 6px 13px; border-radius: 100px; border: 1.5px solid var(--border);
+    background: var(--surface); color: var(--ink-soft); cursor: pointer; transition: all .15s;
+  }
+  .filter-chip:hover { border-color: var(--border-strong); }
+  .filter-chip.active { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+
+  .upload-box {
+    border: 1.5px dashed var(--border-strong); border-radius: var(--radius); padding: 22px; text-align: center;
+    background: var(--surface); margin-bottom: 20px; transition: border-color .15s, background .15s;
+  }
+  .upload-box:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .upload-box.drag-over { border-color: var(--accent); background: var(--accent-soft); border-style: solid; }
+  .upload-box .btn {
+    display: inline-block; background: var(--accent); color: #fff; font-weight: 700; font-size: 13.5px;
+    padding: 10px 20px; border-radius: 9px; cursor: pointer; border: none; letter-spacing: 0.01em;
+    box-shadow: var(--shadow-sm); transition: filter .15s, transform .1s;
+  }
+  .upload-box .btn:hover { filter: brightness(1.08); }
+  .upload-box .btn:active { transform: translateY(1px); }
+  .upload-box input[type=file] { display: none; }
+  .upload-box .hint { font-size: 12px; color: var(--ink-faint); margin-top: 10px; }
+
+  .table-scroll {
+    border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); background: var(--surface);
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 780px; }
+  thead th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); font-weight: 700;
+    background: var(--surface-sunken); padding: 14px 18px; border-bottom: 1.5px solid var(--border-strong); white-space: nowrap;
+    position: sticky; top: 0; z-index: 3; border-right: 1px solid var(--border);
+  }
+  tbody td {
+    padding: 15px 18px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); vertical-align: middle;
+  }
+  thead th:last-child, tbody td:last-child { border-right: none; }
+  tbody td.product-name { white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr { transition: background .1s; }
+  tbody tr:nth-child(even) { background: color-mix(in srgb, var(--surface-sunken) 40%, transparent); }
+  tbody tr:hover { background: var(--surface-sunken); }
+
+  .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 100px; white-space: nowrap; }
+  .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+  .pill.ok { background: var(--ok-soft); color: var(--ok); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .pill.danger { background: var(--danger-soft); color: var(--danger); }
+  .pill.info { background: var(--info-soft); color: var(--info); }
+  .pill.neutral { background: var(--surface-sunken); color: var(--ink-faint); }
+  .pill.neutral::before { display: none; }
+
+  .batch-card {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 9px;
+    box-shadow: var(--shadow-sm); transition: box-shadow .15s;
+  }
+  .batch-card:hover { box-shadow: var(--shadow); }
+  .batch-card .meta { font-size: 12.5px; color: var(--ink-faint); margin-top: 2px; }
+  .batch-card .name { font-weight: 700; font-size: 13.5px; }
+  .del-btn { font-size: 12px; color: var(--danger); background: none; border: 1px solid var(--border); border-radius: 100px; padding: 5px 13px; cursor: pointer; transition: background .15s; }
+  .del-btn:hover { background: var(--danger-soft); }
+
+  .empty { text-align: center; color: var(--ink-faint); font-size: 13px; padding: 32px 0; }
+  .save-status {
+    position: fixed; bottom: 20px; right: 20px; font-size: 12px; font-weight: 600; color: var(--ok); background: var(--surface);
+    border: 1px solid var(--border); padding: 8px 16px; border-radius: 100px; box-shadow: var(--shadow-lift);
+    opacity: 0; transform: translateY(6px); transition: opacity .25s, transform .25s; display: flex; align-items: center; gap: 6px;
+  }
+  .save-status::before { content: "✓"; }
+  .save-status.show { opacity: 1; transform: none; }
+
+  .edit-expiry-link {
+    font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border: none; border-radius: 100px;
+    cursor: pointer; padding: 2px 9px; margin-left: 3px; transition: filter .15s;
+  }
+  .edit-expiry-link:hover { filter: brightness(0.95); }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(20,18,14,0.55); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+    display: flex; align-items: center; justify-content: center; z-index: 200; animation: fade-in .15s ease;
+  }
+  .modal-card { background: var(--surface); border-radius: 16px; padding: 26px; width: 380px; max-width: calc(100vw - 40px); box-shadow: var(--shadow-lift); border: 1px solid var(--border); }
+  .modal-card h3 { margin: 0 0 3px; font-size: 17px; }
+  .modal-card .modal-sub { font-size: 12px; color: var(--ink-faint); margin-bottom: 18px; }
+  .lot-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .lot-row .lot-date { font-family: "Inter", "Noto Sans KR", sans-serif; font-variant-numeric: tabular-nums; font-size: 13px; flex: 1; }
+  .lot-row .lot-qty { font-size: 12px; color: var(--ink-faint); }
+  .lot-row .lot-qty-input {
+    width: 76px; padding: 6px 8px; border-radius: 7px; border: 1.5px solid var(--border); background: var(--surface-sunken);
+    color: var(--ink); font-size: 12.5px; text-align: right; transition: border-color .15s;
+  }
+  .lot-row .lot-qty-input:focus { border-color: var(--accent); outline: none; }
+  .lot-row .lot-source { font-size: 10.5px; color: var(--ink-faint); margin-left: 4px; }
+  .lot-remove { font-size: 16px; line-height: 1; color: var(--danger); background: none; border: none; cursor: pointer; padding: 3px 7px; border-radius: 6px; transition: background .15s; }
+  .lot-remove:hover { background: var(--danger-soft); }
+  .lot-empty { font-size: 12.5px; color: var(--ink-faint); padding: 10px 0; }
+  .lot-add-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+  .lot-add-row input {
+    padding: 8px 10px; border-radius: 8px; border: 1.5px solid var(--border); background: var(--surface-sunken); color: var(--ink); font-size: 13px;
+    transition: border-color .15s; min-width: 0;
+  }
+  .lot-add-row input:focus { border-color: var(--accent); outline: none; }
+  .lot-add-row input.date-input { flex: 1 1 130px; }
+  .lot-add-row input.qty-input { flex: 1 1 90px; }
+  .lot-add-row button { flex: 1 0 100%; padding: 9px 15px; border-radius: 8px; border: none; background: var(--accent); color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; transition: filter .15s; white-space: nowrap; }
+  .lot-add-row button:hover { filter: brightness(1.08); }
+  .modal-close { width: 100%; margin-top: 18px; padding: 10px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface); color: var(--ink-soft); font-size: 13.5px; cursor: pointer; transition: background .15s; }
+  .modal-close:hover { background: var(--surface-sunken); }
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-card">
+    <h1>첫맛 재고 트래커</h1>
+    <p>담당자 계정으로 로그인해주세요.</p>
+    <input id="login-id" type="text" placeholder="아이디" autocomplete="off">
+    <input id="login-pw" type="password" placeholder="비밀번호">
+    <button id="login-btn">로그인</button>
+    <div id="login-error">아이디 또는 비밀번호가 올바르지 않습니다.</div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">
+        <div class="brand-mark">🍶</div>
+        <div>
+          <h1>첫맛 재고 트래커</h1>
+          <div class="sub" id="last-updated">불러오는 중...</div>
+        </div>
+      </div>
+      <button class="logout-btn" id="logout-btn">로그아웃</button>
+    </header>
+
+    <div class="brand-row" id="brand-row">
+      <button class="brand-btn active" data-brand="all">전체</button>
+      <button class="brand-btn" data-brand="첫맛">첫맛</button>
+      <button class="brand-btn" data-brand="저스톡">저스톡</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="stock">첫맛 현재고</button>
+      <button class="tab-btn" data-tab="outbound">출고내역 관리</button>
+      <button class="tab-btn" data-tab="inbound">입고내역 관리</button>
+    </div>
+
+    <section class="tab-panel active" id="panel-stock">
+      <div class="stat-row" id="stock-stats"></div>
+      <div class="health-card" id="stock-health-chart"></div>
+
+      <div class="upload-box" id="baseline-upload-box">
+        <label class="btn" for="baseline-file">기초재고 새로 설정 (이지어드민 현재고 엑셀 업로드)</label>
+        <input type="file" id="baseline-file" accept=".xls,.xlsx">
+        <div class="hint">새로 업로드하면 그 시점 기준으로 초기화되고, 이후 출고/입고 내역이 여기에 누적 반영됩니다. 파일을 이 박스로 드래그해서 놓아도 됩니다.</div>
+      </div>
+
+      <div class="toolbar">
+        <input class="search-input" id="stock-search" placeholder="상품명 또는 바코드 검색">
+        <button class="filter-chip sort-chip active" data-sort="remaining">재고 적은순</button>
+        <button class="filter-chip sort-chip" data-sort="expiry">소비기한 빠른순</button>
+      </div>
+
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>상태</th><th>상품명</th><th>바코드</th><th>기초재고</th><th>누적출고</th><th>누적입고</th><th>현재고</th><th>소비기한(로트별)</th></tr>
+          </thead>
+          <tbody id="stock-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-outbound">
+      <div class="upload-box" id="outbound-upload-box">
+        <label class="btn" for="outbound-file">출고 엑셀 첨부</label>
+        <input type="file" id="outbound-file" accept=".xls,.xlsx">
+        <div class="hint">더존 출고현황 엑셀을 그대로 업로드하세요. 업로드할 때마다 누적됩니다. 파일을 이 박스로 드래그해서 놓아도 됩니다.</div>
+      </div>
+      <div id="outbound-list"></div>
+    </section>
+
+    <section class="tab-panel" id="panel-inbound">
+      <div class="upload-box" id="inbound-upload-box">
+        <label class="btn" for="inbound-file">입고 엑셀 첨부</label>
+        <input type="file" id="inbound-file" accept=".xls,.xlsx">
+        <div class="hint">재고이동전표(전체 입고 수량 시트) 또는 개별 입고 엑셀을 업로드하세요. 파일을 이 박스로 드래그해서 놓아도 됩니다.</div>
+      </div>
+      <div id="inbound-list"></div>
+    </section>
+  </div>
+</div>
+
+<div class="save-status" id="save-status">저장됨</div>
+
+<div class="modal-overlay" id="expiry-modal" hidden>
+  <div class="modal-card">
+    <h3 id="expiry-modal-title">소비기한 관리</h3>
+    <div class="modal-sub" id="expiry-modal-sub"></div>
+    <div id="expiry-lot-list"></div>
+    <div class="lot-add-row">
+      <input type="text" id="expiry-new-date" class="date-input" placeholder="YY.MM.DD (예: 27.03.15)">
+      <input type="number" id="expiry-new-qty" class="qty-input" placeholder="수량(선택)">
+      <button type="button" id="expiry-add-btn">추가</button>
+    </div>
+    <button type="button" class="modal-close" id="expiry-modal-close">닫기</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="stock-modal" hidden>
+  <div class="modal-card">
+    <h3>현재고 수정</h3>
+    <div class="modal-sub" id="stock-modal-sub"></div>
+    <div class="lot-add-row">
+      <input type="number" id="stock-new-qty" class="qty-input" placeholder="현재고 수량" style="flex:1 1 100%;">
+      <button type="button" id="stock-save-btn">저장</button>
+    </div>
+    <button type="button" class="modal-close" id="stock-reset-btn">자동계산값으로 되돌리기</button>
+    <button type="button" class="modal-close" id="stock-modal-close">닫기</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var LOGIN_ID = "echungwoo";
+  var LOGIN_PW = "dlcjddn1004!";
+
+  // 저장은 Cloudflare Worker를 통해서만 이루어짐 (GitHub 토큰은 Worker 서버 쪽 비밀변수로만 존재,
+  // 이 페이지 코드에는 전혀 노출되지 않음)
+  var WORKER_URL = "https://cheotmat-inventory-api.ecw-c18.workers.dev";
+
+  var state = { baseline: null, outboundBatches: [], inboundBatches: [] };
+
+  // 단종상품 - 현재고 계산에서 완전히 제외
+  var EXCLUDED_NAMES = [
+    "첫맛 1호 선물세트 개별세트",
+    "첫맛 꼬지소스 순한맛 460g",
+    "첫맛 닭강정매운맛소스 10kg",
+    "첫맛 떡볶이양념 10kg",
+    "첫맛 양념치킨매운맛소스 440g",
+    "첫맛 양념치킨순한맛소스 440g",
+    "첫맛 캡사이신매운맛소스 10kg",
+    "첫맛 선물세트 6개입 카톤",
+    "양꼬치시즈닝",
+    "첫맛 꼬지소스 매운맛 460g",
+    "첫맛 치킨튀김가루 5kg",
+    "첫맛 우동다시 2kg",
+    "첫맛 바베큐소스 10kg",
+  ];
+
+  // 구글시트(재고 이슈품목-판매계획-현황) "소비기한 임박건" 시트에서 가져온 참고용 소비기한.
+  // 실제 입고 엑셀을 첨부하면 그쪽 데이터가 우선하고, 없을 때만 이 값을 참고로 보여줌.
+  var SEED_EXPIRY = {"첫맛 내몸엔저당 저당불닭소스 345g":["26.10.19"],"첫맛 내몸엔저당 저당캡스파이시마요소스 300g":["26.10.20"],"첫맛 만능비빔&무침양념 30g":["26.12.04"],"첫맛 모밀소스 2.1kg":["26.12.11"],"첫맛 양념치킨매운맛소스 10kg":["26.12.12","28.01.22"],"첫맛 만능멸치육수 500g":["26.12.18"],"첫맛 만능비빔무침양념550g":["26.12.19"],"첫맛 만능 비빔무침양념 330g":["26.12.29"],"첫맛 모밀소스 1.05kg":["27.01.06","27.11.17"],"첫맛 타르타르드레싱소스 1.7kg":["27.01.15"],"첫맛 만능멸치육수 300g":["27.02.04"],"첫맛 돼지불고기 양념 2.1kg":["27.03.02","27.09.18"],"첫맛 돼지불고기양념 10kg":["27.03.03"],"첫맛 만능비빔&무침양념 1.1kg":["27.03.07","27.03.29","27.07.21"],"첫맛 돼지갈비양념 10kg":["27.03.10"],"첫맛 소갈비양념 10kg":["27.03.10"],"첫맛 바베큐소스 10kg":["27.03.24"],"첫맛 허니머스타드소스 1.85kg":["27.04.05"],"첫맛 캡사이신분말 1kg":["27.04.06"],"첫맛 캡사이신분말 400g":["27.04.09"],"첫맛 내몸엔저당 저당비빔무침양념 365g":["27.04.15"],"첫맛 내몸엔저당 저당양념치킨소스 345g":["27.04.16"],"첫맛 탕수육소스 1.85kg":["27.04.19","27.07.05"],"첫맛 만능김치찌개분말 500g":["27.04.23"],"첫맛 겨자머스타드소스 1kg":["27.04.26"],"첫맛 저당 떡볶이양념분말 500g":["27.04.26","27.06.16"],"첫맛 케이준드레싱소스 1.7kg":["27.05.14"],"첫맛 해파리겨자냉채소스 880g":["27.05.25"],"첫맛 돈까스소스 1.9kg":["27.05.25"],"첫맛 정통데리야끼소스 1.9kg":["27.05.28"],"첫맛 떡볶이양념분말(매운맛) 500g":["27.05.28"],"첫맛 만능치킨스톡 1kg":["27.05.28"],"첫맛 돈까스소스 990g":["27.06.03"],"첫맛 양념치킨순한맛소스 440g":["27.06.07"],"첫맛 떡볶이양념분말(매운맛) 1kg":["27.06.11"],"첫맛 떡볶이양념분말(순한맛) 1kg":["27.06.15","27.07.05"],"첫맛 떡볶이양념분말(순한맛) 500g":["27.06.15"],"첫맛 요리맛술 2kg":["27.06.21"],"첫맛 캡사이신매운맛소스 550g":["27.07.08"],"첫맛 만능해물육수 1kg":["27.07.13"],"첫맛 오뎅탕육수진국 1kg":["27.07.18"],"첫맛 닭강정순한맛소스 10kg":["27.07.20"],"첫맛 꼬지소스 순한맛 10kg":["27.07.21","27.11.27"],"첫맛 캡사이신매운맛소스 2kg":["27.07.27"],"첫맛 쭈낙볶음양념 2.1kg":["27.08.02","27.10.12"],"첫맛 가쓰오진국 2kg":["27.08.11","27.10.19"],"닭강정순한맛소스 2.1kg":["27.09.04"],"첫맛 닭강정순한맛소스 2.1kg":["27.09.04"],"첫맛 핫바베큐소스 2.05kg":["27.01.08","27.06.01","27.09.16"],"첫맛 마늘간장소스 1.05kg":["27.09.17","27.12.10"],"첫맛 돼지갈비양념 1.95kg":["27.09.18"],"첫맛 소갈비양념 2kg":["27.09.18"],"첫맛 양념치킨순한맛소스 530g":["27.09.24"],"첫맛 양념치킨매운맛소스 530g":["27.09.24"],"첫맛 꼬지소스순한맛 540g":["27.09.24"],"첫맛 꼬지소스매운맛 540g":["27.09.24"],"첫맛 파절이소스 970g":["27.10.06"],"첫맛 8배고농축냉면육수 1.1kg":["27.10.06","28.01.13"],"첫맛 만능멸치육수 1.95kg":["27.10.14"],"첫맛 꼬지소스 매운맛 2.1kg":["27.10.20","27.12.04","27.12.08"],"첫맛 꼬지소스매운맛 10kg":["27.10.20"],"첫맛 매운닭발양념 2kg":["27.10.20"],"첫맛 닭강정매운맛소스 2.1kg":["27.10.22"],"첫맛 양념치킨 순한맛소스 2.1kg":["27.10.26"],"첫맛 만능불볶음양념 2kg":["27.10.26"],"첫맛 소불고기양념 2kg":["27.11.11"],"첫맛 스위트칠리소스 2.05kg":["27.11.12"],"첫맛 우동다시 2kg":["27.11.19","27.12.04","27.12.17"],"첫맛 떡볶이비법양념 2.1kg":["27.11.20"],"첫맛 꼬지소스 순한맛 2.1kg":["27.11.20"],"첫맛 만능불볶음양념 1kg":["27.11.30"],"첫맛 양념치킨 매운맛소스 2.1kg":["27.12.04"],"첫맛 8배고농축냉면육수 2.1kg":["27.12.14","27.12.23"],"첫맛 양념치킨순한맛소스 10kg":["27.12.15"],"첫맛 만능멸치육수 10kg":["27.12.22"],"첫맛 만능비빔&무침양념 2.2kg":["27.11.27","27.12.03","27.12.30"],"첫맛 만능멸치육수 1kg":["28.01.02"],"첫맛 만능파절이소스 1.9kg":["28.01.05"],"첫맛 모밀소스 10kg":["28.01.22"],"첫맛 8배고농축냉면육수 10kg":["28.01.26"],"금실면 슈퍼용 450g":["28.02.08"]};
+
+  async function loadState() {
+    try {
+      var res = await fetch(WORKER_URL, { cache: "no-store" });
+      state = await res.json();
+    } catch (e) {
+      console.error("불러오기 실패", e);
+      alert("데이터 불러오기에 실패했습니다: " + e.message);
+    }
+  }
+
+  // 연속으로 여러 번 저장이 호출돼도(로트 여러 개 빠르게 추가 등) 겹치지 않고 순서대로 실행되게 큐로 관리
+  var persistQueue = Promise.resolve();
+  function persist() {
+    persistQueue = persistQueue.then(doPersist, doPersist);
+    return persistQueue;
+  }
+  async function doPersist() {
+    try {
+      var res = await fetch(WORKER_URL, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(state),
+      });
+      var json = await res.json();
+      if (!res.ok) throw new Error(json.error || JSON.stringify(json));
+      var el = document.getElementById("save-status");
+      el.classList.add("show");
+      setTimeout(function () { el.classList.remove("show"); }, 1800);
+    } catch (e) {
+      console.error("저장 실패", e);
+      alert("저장에 실패했습니다: " + e.message + "\n다시 시도하기 전에 새로고침 해주세요 (다른 사람이 동시에 저장했을 수 있습니다).");
+    }
+  }
+
+  // ---------- 로그인 ----------
+  function tryLogin() {
+    var id = document.getElementById("login-id").value.trim();
+    var pw = document.getElementById("login-pw").value;
+    if (id === LOGIN_ID && pw === LOGIN_PW) {
+      try { sessionStorage.setItem("cheotmat_inv_auth", "1"); } catch (e) {}
+      enterApp();
+    } else {
+      document.getElementById("login-error").style.display = "block";
+    }
+  }
+  document.getElementById("login-btn").addEventListener("click", tryLogin);
+  document.getElementById("login-pw").addEventListener("keydown", function (e) { if (e.key === "Enter") tryLogin(); });
+  document.getElementById("logout-btn").addEventListener("click", function () {
+    try { sessionStorage.removeItem("cheotmat_inv_auth"); } catch (e) {}
+    location.reload();
+  });
+
+  async function enterApp() {
+    document.getElementById("login-screen").style.display = "none";
+    document.getElementById("app").style.display = "block";
+    await loadState();
+    migrateManualExpiry();
+    renderAll();
+  }
+
+  // 최초 1회: 구글시트 참고 소비기한(SEED_EXPIRY, 상품명 기준)을 바코드 기준 수정가능 데이터로 옮겨줌.
+  // 이후로는 화면에서 직접 수정한 내용이 우선하고, 이 시드 상수는 다시 쓰이지 않음.
+  function migrateManualExpiry() {
+    if (state.manualExpiry) return;
+    state.manualExpiry = {};
+    if (state.baseline) {
+      Object.keys(state.baseline.items).forEach(function (barcode) {
+        var name = state.baseline.items[barcode].name;
+        if (SEED_EXPIRY[name]) {
+          state.manualExpiry[barcode] = SEED_EXPIRY[name].map(function (d) { return { date: d, qty: null }; });
+        }
+      });
+    }
+    persist();
+  }
+
+  try {
+    if (sessionStorage.getItem("cheotmat_inv_auth") === "1") enterApp();
+  } catch (e) {}
+
+  // ---------- 유틸 ----------
+  function findCol(header, candidates) {
+    for (var i = 0; i < candidates.length; i++) {
+      var idx = header.indexOf(candidates[i]);
+      if (idx !== -1) return idx;
+    }
+    return -1;
+  }
+  function readWorkbookFromFile(file, callback) {
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var data = new Uint8Array(e.target.result);
+      callback(XLSX.read(data, { type: "array" }));
+    };
+    reader.readAsArrayBuffer(file);
+  }
+  function sheetRows(wb, sheetName) {
+    var sheet = wb.Sheets[sheetName || wb.SheetNames[0]];
+    return XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
+  }
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  // 출고일자를 "YYYY-MM-DD"로 통일 (엑셀 일련번호/문자열 둘 다 처리)
+  function normalizeDateVal(v) {
+    if (v === "" || v === null || v === undefined) return "";
+    if (typeof v === "number") {
+      var d = new Date(Date.UTC(1899, 11, 30) + v * 86400000);
+      return d.getUTCFullYear() + "-" + String(d.getUTCMonth() + 1).padStart(2, "0") + "-" + String(d.getUTCDate()).padStart(2, "0");
+    }
+    var s = String(v).trim();
+    var m = s.match(/(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
+    if (m) return m[1] + "-" + m[2].padStart(2, "0") + "-" + m[3].padStart(2, "0");
+    return s;
+  }
+  function todayLabel() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
+  // ---------- 파싱 ----------
+  function parseBaseline(wb) {
+    var rows = sheetRows(wb);
+    var header = rows[0] || [];
+    var idx = {
+      barcode: findCol(header, ["바코드"]), name: findCol(header, ["상품명"]), qty: findCol(header, ["가용재고"]),
+      warn: findCol(header, ["경고수량"]), danger: findCol(header, ["위험수량"]),
+    };
+    if (idx.barcode === -1 || idx.qty === -1) throw new Error("이지어드민 현재고 형식이 맞는지 확인해주세요 (바코드/가용재고 컬럼을 못 찾음)");
+    var items = {};
+    for (var i = 1; i < rows.length; i++) {
+      var r = rows[i]; var barcode = r[idx.barcode];
+      if (!barcode) continue;
+      items[String(barcode)] = {
+        name: idx.name !== -1 ? (r[idx.name] || "") : "",
+        qty: Number(r[idx.qty]) || 0,
+        warnQty: idx.warn !== -1 ? (Number(r[idx.warn]) || 0) : 0,
+        dangerQty: idx.danger !== -1 ? (Number(r[idx.danger]) || 0) : 0,
+      };
+    }
+    return items;
+  }
+  // 더존 출고 엑셀에 실제 상품이 아닌 회계성 항목(물류비, 할인쿠폰 등)이 품번을 달고 섞여 나오는 경우가 있어 제외
+  var NON_PRODUCT_NAME_HINTS = ["물류비", "쿠폰", "할인"];
+  function isNonProductRow(name) {
+    var n = String(name || "");
+    return NON_PRODUCT_NAME_HINTS.some(function (hint) { return n.indexOf(hint) !== -1; });
+  }
+  function parseOutbound(wb) {
+    var rows = sheetRows(wb);
+    var header = rows[0] || [];
+    var idx = { barcode: findCol(header, ["품번"]), name: findCol(header, ["품명"]), qty: findCol(header, ["출고수량"]), date: findCol(header, ["출고일자"]) };
+    if (idx.barcode === -1 || idx.qty === -1) throw new Error("출고 엑셀 형식이 맞는지 확인해주세요 (품번/출고수량 컬럼을 못 찾음)");
+    var out = [];
+    for (var i = 1; i < rows.length; i++) {
+      var r = rows[i]; var barcode = r[idx.barcode];
+      var name = idx.name !== -1 ? (r[idx.name] || "") : "";
+      // 소계/합계 행(품번 또는 품명이 비어있음)과 물류비/할인쿠폰 같은 비상품 행은 건너뜀
+      if (!barcode || !name || isNonProductRow(name)) continue;
+      out.push({ barcode: String(barcode), name: name, qty: Number(r[idx.qty]) || 0, date: idx.date !== -1 ? normalizeDateVal(r[idx.date]) : "" });
+    }
+    return out;
+  }
+  // "28.01.01(12B)01.06(11B)02.10(27B)" 또는 "28.01.22 75개" 같은 비고란 자유서식에서
+  // 날짜+수량을 뽑아냄. "(NNB)"는 박스수(입수량표로 환산 필요), "NN개"는 이미 개수(그대로 사용).
+  // 뒤에 나오는 mm.dd(연도 생략)는 바로 앞 전체 날짜와 같은 연도로 간주.
+  // 수량 표기가 전혀 없으면 boxes/units 둘 다 null (그 경우 그 날짜 하나가 행 전체 수량을 가짐 - 예: "28.02.26" 단독 표기)
+  var QTY_SUFFIX_RE = "(?:\\((\\d+)\\s*B?\\)|\\s*\\/?\\s*(\\d+)\\s*개)?";
+  function extractDatesFromRemark(text) {
+    if (!text) return [];
+    var out = [];
+    var fullDateRe = new RegExp("(\\d{2})\\.(\\d{2})\\.(\\d{2})" + QTY_SUFFIX_RE, "g");
+    var matches = [], m;
+    while ((m = fullDateRe.exec(text)) !== null) {
+      matches.push({ index: m.index, len: m[0].length, yy: m[1], mm: m[2], dd: m[3], boxes: m[4] ? Number(m[4]) : null, units: m[5] ? Number(m[5]) : null });
+    }
+    for (var i = 0; i < matches.length; i++) {
+      var cur = matches[i];
+      out.push({ date: cur.yy + "." + cur.mm + "." + cur.dd, boxes: cur.boxes, units: cur.units });
+      var segStart = cur.index + cur.len;
+      var segEnd = i + 1 < matches.length ? matches[i + 1].index : text.length;
+      var seg = text.slice(segStart, segEnd);
+      var partialRe = new RegExp("(\\d{2})\\.(\\d{2})" + QTY_SUFFIX_RE + "(?!\\.\\d)", "g"), pm;
+      while ((pm = partialRe.exec(seg)) !== null) out.push({ date: cur.yy + "." + pm[1] + "." + pm[2], boxes: pm[3] ? Number(pm[3]) : null, units: pm[4] ? Number(pm[4]) : null });
+    }
+    return out;
+  }
+
+  // 품목별 박스당 입수량(1박스 = 몇 개). 비고란에 "날짜(NN박스)" 형태로만 적힌 입고 수량을
+  // 실제 개수로 환산할 때 사용 (바코드/품번 기준). "첫맛-박스입수.xlsx" 기준, 목록에 없는 품목은
+  // 박스수만 참고로 표시되고 재고 수량 계산(개수 환산)에는 반영되지 않음.
+  var UNITS_PER_BOX = {"8809160222442":24,"8809160222350":24,"8809160222480":12,"8809160222428":12,"8809160224200":15,"8809160224026":12,"8809160224217":15,"8809160224033":12,"8809160224286":15,"8809160224040":12,"8809160224149":12,"8809160224316":15,"8809160224057":12,"8809160224347":15,"8809160224064":12,"8809160224354":15,"8809160224088":12,"8809160224361":15,"8809160224071":12,"8809160224156":15,"8809160223906":12,"8809160224095":12,"8809160224163":15,"8809160223920":12,"8809160224170":15,"8809160223012":15,"8809160223036":12,"8809160224187":15,"8809160224132":12,"8809160223937":12,"8809160224194":15,"8809160223043":15,"8809160223050":12,"8809160224224":15,"8809160223913":12,"8809160223944":12,"8809160224231":15,"8809160223111":15,"8809160223128":12,"8809160224101":12,"8809160224248":15,"8809160223951":12,"8809160224255":15,"8809160224262":15,"8809160223982":6,"8809160223968":12,"8809160224279":15,"8809160223999":12,"8809160224293":15,"8809160224118":12,"8809160224125":12,"8809160224309":15,"8809160224323":15,"8809160224002":12,"8809160224330":15,"8809160224019":12,"8809160222466":12,"8809160222299":1,"8809160222473":8,"8809160222923":8,"8809160223005":12,"8809160222725":1,"8809160222718":8,"8809160222336":24,"8809160222688":1,"8809160222671":8,"8809160223432":1,"8809160222640":8,"8809160223449":1,"8809160222633":8,"8809160222589":8,"8809160220578":12,"8809160223258":8,"8809160223265":1,"8809160223357":1,"8809160223340":8,"8809160222985":8,"8809160222992":1,"8809160222770":10,"8809160222763":20,"8809160222756":10,"8809160222749":20,"8809160222626":12,"8800368800005":20,"8809160222374":6,"8809160222787":1,"8809160222367":12,"8809160222558":12,"8809160222534":8,"8809160222497":12,"8809160222510":8,"8809160222503":8,"8809160222916":12,"8809160223173":8,"8809160222596":12,"8809160222619":1,"8809160222602":8,"8809160223203":1,"8809160223210":8,"8809160223227":1,"8809160223241":1,"8809160223234":8,"8809160223029":8,"8809160222404":1,"8809160222329":8,"8809160222381":1,"8809160222305":8,"8809160222572":12,"8809160222527":8,"8809160224378":20,"8809160223456":8,"8809160223098":8,"8809160222893":12,"8809160222411":8,"8809160222398":12,"8809160222459":10,"8809160223388":8,"8809160223067":8,"8809160223180":8,"8809160222961":8,"8809160222978":12,"8809160222954":8,"8809160223517":24,
+    "8809160222695":24,"8809160222695-1":24,"8809160222657":24,"8809160222657-1":24,"8809160223487":24,"8809160223500":24,"8809160223494":24,"8809160222435":24,"8800638800005":15,"8809160222343":24,"8809160222336-1":24,"8809160222312":24,"8809160222312-1":24,"8809160222909":8,"8809160221902":12};
+
+  function parseInbound(wb) {
+    var sheetName = wb.SheetNames.indexOf("전체 입고 수량") !== -1 ? "전체 입고 수량" : wb.SheetNames[0];
+    var rows = sheetRows(wb, sheetName);
+    var header = rows[0] || [];
+    var idx = {
+      barcode: findCol(header, ["품  번", "품번"]), name: findCol(header, ["품  명", "품명"]),
+      qty: findCol(header, ["이동수량"]), expiry: findCol(header, ["소비기한"]), date: findCol(header, ["No.", "No"]),
+      remark: findCol(header, ["비고"]), lot: findCol(header, ["LOT"]),
+    };
+    if (idx.barcode === -1 || idx.qty === -1) throw new Error("입고 엑셀 형식이 맞는지 확인해주세요 (품번/이동수량 컬럼을 못 찾음)");
+    var out = [];
+    for (var i = 1; i < rows.length; i++) {
+      var r = rows[i]; var barcode = r[idx.barcode];
+      if (!barcode) continue;
+      var primaryExpiry = idx.expiry !== -1 ? (r[idx.expiry] || "") : "";
+      var remarkText = (idx.remark !== -1 ? r[idx.remark] : "") || (idx.lot !== -1 ? r[idx.lot] : "") || "";
+      var lots = primaryExpiry ? [] : extractDatesFromRemark(String(remarkText));
+      out.push({
+        barcode: String(barcode), name: idx.name !== -1 ? (r[idx.name] || "") : "",
+        qty: Number(r[idx.qty]) || 0, expiry: primaryExpiry, lots: lots,
+        date: idx.date !== -1 ? (r[idx.date] || "") : "",
+      });
+    }
+    return out;
+  }
+
+  // ---------- 계산 ----------
+  var currentFilter = "all", currentSearch = "", currentSort = "remaining", currentBrand = "all";
+
+  var STOCKOUT_RISK_DAYS = 7; // 품절/위험: 최근 1주일 출고량을 앞으로 1주일 예상 수요로 보고 판정
+  var WARN_RISK_DAYS = 30; // 경고: 최근 1개월 출고량을 앞으로 1개월 예상 수요로 보고 판정
+
+  // 품번(바코드)이 파일마다 다르게 찍히는 경우가 많아서, 품목명(공백/괄호 무시)을 우선 기준으로 매칭.
+  // 바코드가 정확히 일치하면 그걸 쓰고, 안 맞으면 이름으로 기초재고 품목을 찾아 거기에 합침.
+  function normalizeProductName(name) {
+    return String(name || "").replace(/\s+/g, "").replace(/[()]/g, "").toLowerCase();
+  }
+  // "첫맛"/"저스톡" 같은 브랜드 접두어가 파일마다 있다 없다 해서, 이름 매칭이 안 될 때 이거 뗀 걸로도 한번 더 시도
+  var BRAND_PREFIXES = ["첫맛", "저스톡", "면세"];
+  function coreProductName(name) {
+    var n = normalizeProductName(name);
+    BRAND_PREFIXES.forEach(function (b) { n = n.split(b).join(""); });
+    return n;
+  }
+  // 브랜드까지 떼도 안 맞을 때 최후 수단 - "만능" 같이 시스템마다 붙이거나 빼는 수식어까지 떼고 한 번 더 시도
+  // (예: 더존은 "첫맛 만능파절이소스 970g", 기초재고는 "첫맛 파절이소스 970g"로 서로 다르게 부르는 경우)
+  var NOISE_WORDS = ["만능"];
+  function looseProductName(name) {
+    var n = coreProductName(name);
+    NOISE_WORDS.forEach(function (w) { n = n.split(w).join(""); });
+    return n;
+  }
+
+  function computeStock() {
+    var map = {};
+    if (!state.baseline) return [];
+    var sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - (STOCKOUT_RISK_DAYS - 1));
+    var cutoff = sevenDaysAgo.getFullYear() + "-" + String(sevenDaysAgo.getMonth() + 1).padStart(2, "0") + "-" + String(sevenDaysAgo.getDate()).padStart(2, "0");
+    var thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - (WARN_RISK_DAYS - 1));
+    var cutoff30 = thirtyDaysAgo.getFullYear() + "-" + String(thirtyDaysAgo.getMonth() + 1).padStart(2, "0") + "-" + String(thirtyDaysAgo.getDate()).padStart(2, "0");
+    // 기초재고를 설정한 지 며칠 안 됐으면(예: 오늘 막 리셋) 출고 데이터가 하루이틀치뿐이라
+    // 주말 몰아치기 같은 것 때문에 품절위험/경고가 잘못 뜰 수 있어서, 최소 며칠치 데이터가 쌓이기 전엔 판정하지 않음
+    var MIN_TREND_DAYS = 3;
+    var daysSinceBaseline = state.baseline.setAt ? Math.floor((new Date() - new Date(state.baseline.setAt)) / 86400000) + 1 : 999;
+    var trendReady = daysSinceBaseline >= MIN_TREND_DAYS;
+
+    var nameIndex = {};
+    var coreIndex = {};
+    var looseIndex = {};
+    Object.keys(state.baseline.items).forEach(function (barcode) {
+      var b = state.baseline.items[barcode];
+      map[barcode] = { barcode: barcode, name: b.name, baseline: b.qty, warnQty: b.warnQty, dangerQty: b.dangerQty, outbound: 0, inbound: 0, recent7d: 0, recent30d: 0, expiries: [] };
+      var norm = normalizeProductName(b.name);
+      if (norm && !nameIndex[norm]) nameIndex[norm] = barcode;
+      var core = coreProductName(b.name);
+      if (core && !coreIndex[core]) coreIndex[core] = barcode;
+      var loose = looseProductName(b.name);
+      if (loose && !looseIndex[loose]) looseIndex[loose] = barcode;
+    });
+    function resolveKey(barcode, name) {
+      if (map[barcode]) return barcode;
+      var norm = normalizeProductName(name);
+      if (norm && nameIndex[norm]) return nameIndex[norm];
+      var core = coreProductName(name);
+      if (core && coreIndex[core]) return coreIndex[core];
+      var loose = looseProductName(name);
+      if (loose && looseIndex[loose]) return looseIndex[loose];
+      return barcode;
+    }
+    state.outboundBatches.forEach(function (batch) {
+      batch.rows.forEach(function (r) {
+        var key = resolveKey(r.barcode, r.name);
+        if (!map[key]) map[key] = { barcode: key, name: r.name, baseline: 0, warnQty: 0, dangerQty: 0, outbound: 0, inbound: 0, recent7d: 0, recent30d: 0, expiries: [] };
+        map[key].outbound += r.qty;
+        if (r.date && r.date >= cutoff) map[key].recent7d += r.qty;
+        if (r.date && r.date >= cutoff30) map[key].recent30d += r.qty;
+        if (r.name && !map[key].name) map[key].name = r.name;
+        // 현재고/소비기한을 화면에서 수기로 고쳐둔 시점(setAt) 이후에 찍힌 출고만 따로 집계해둠 -
+        // 수기 수정값은 "그 시점의 실제 수량"이므로, 그 이후 출고분만 거기서 계속 빼줘야 함.
+        var stockEdit = state.manualStock && state.manualStock[key];
+        var stockSetAt = stockEdit && typeof stockEdit === "object" ? stockEdit.setAt : null;
+        if (r.date && stockSetAt && r.date > stockSetAt) map[key].outboundSinceStockEdit = (map[key].outboundSinceStockEdit || 0) + r.qty;
+        var expirySetAt = state.expiryCorrectedAt && state.expiryCorrectedAt[key];
+        if (r.date && expirySetAt && r.date > expirySetAt) map[key].outboundSinceExpiryEdit = (map[key].outboundSinceExpiryEdit || 0) + r.qty;
+      });
+    });
+    state.inboundBatches.forEach(function (batch) {
+      batch.rows.forEach(function (r) {
+        var key = resolveKey(r.barcode, r.name);
+        if (!map[key]) map[key] = { barcode: key, name: r.name, baseline: 0, warnQty: 0, dangerQty: 0, outbound: 0, inbound: 0, recent7d: 0, recent30d: 0, expiries: [] };
+        map[key].inbound += r.qty;
+        if (r.name && !map[key].name) map[key].name = r.name;
+        // 입고쪽 r.date는 "No." 컬럼이라 실제 날짜가 아님 - 대신 파일 첨부일(batch.uploadedAt) 기준으로 판단
+        var stockEdit2 = state.manualStock && state.manualStock[key];
+        var stockSetAt2 = stockEdit2 && typeof stockEdit2 === "object" ? stockEdit2.setAt : null;
+        if (stockSetAt2 && batch.uploadedAt > stockSetAt2) map[key].inboundSinceStockEdit = (map[key].inboundSinceStockEdit || 0) + r.qty;
+        if (r.expiry) {
+          map[key].expiries.push({ date: r.expiry, qty: r.qty, uploadedAt: batch.uploadedAt });
+        } else if (r.lots && r.lots.length) {
+          if (r.lots.length === 1 && r.lots[0].boxes == null && r.lots[0].units == null) {
+            // 비고에 날짜 하나만 있고 수량 표기가 없으면 그 행 전체 수량이 그 날짜 소비기한
+            map[key].expiries.push({ date: r.lots[0].date, qty: r.qty, uploadedAt: batch.uploadedAt });
+          } else {
+            var perBox = UNITS_PER_BOX[key];
+            r.lots.forEach(function (lot) {
+              var lotQty = lot.units != null ? lot.units : (lot.boxes != null && perBox ? lot.boxes * perBox : null);
+              map[key].expiries.push({ date: lot.date, qty: lotQty, boxes: lot.boxes, uploadedAt: batch.uploadedAt });
+            });
+          }
+        }
+      });
+    });
+    var list = Object.keys(map)
+      .filter(function (k) { return EXCLUDED_NAMES.indexOf(map[k].name) === -1; })
+      .map(function (k) {
+        var v = map[k];
+        v.remaining = v.baseline - v.outbound + v.inbound;
+        v.autoRemaining = v.remaining;
+        // 화면에서 직접 수정한 현재고(state.manualStock)가 있으면, 그 수정값을 새 기준점으로 삼아
+        // 그 이후에 찍힌 출고/입고만 반영함(수정한 시점 이전 출고까지 또 빼면 이중차감이 됨)
+        if (state.manualStock && state.manualStock[v.barcode] !== undefined) {
+          var se = state.manualStock[v.barcode];
+          if (se && typeof se === "object") {
+            v.remaining = se.qty - (v.outboundSinceStockEdit || 0) + (v.inboundSinceStockEdit || 0);
+          } else {
+            v.remaining = se; // 구버전 데이터(날짜 없이 숫자만 저장된 경우) 호환용
+          }
+          v.stockOverridden = true;
+        }
+        // 품절/위험: 최근 1주일 출고량을 앞으로 1주일 예상 수요로 보고, 남은재고가 그보다 적으면 위험
+        // (기초재고 설정한 지 얼마 안 됐으면 데이터가 부족해서 판정 안 함 - 주말 몰아치기 출고 등으로 오탐 방지)
+        v.stockoutRisk = trendReady && v.recent7d > 0 && v.remaining < v.recent7d;
+        // 경고: 최근 1개월 출고량을 앞으로 1개월 예상 수요로 보고, 남은재고가 그보다 적으면 경고
+        v.warnRisk = trendReady && v.recent30d > 0 && v.remaining < v.recent30d;
+        if (v.remaining <= 0) v.status = "danger";
+        else if (v.dangerQty > 0 && v.remaining <= v.dangerQty) v.status = "danger";
+        else if (v.stockoutRisk) v.status = "danger";
+        else if (v.warnRisk) v.status = "warn";
+        else v.status = "ok";
+
+        // 같은 날짜 로트가 여러 입고파일에서 따로따로 잡히면(예: 27.08.30에 두 번 입고) 우선 날짜별로 묶어둠.
+        // 수기 수정이 없는 날짜는 그냥 합계로, 수기 수정이 있는 날짜는 "수정값 + 그 수정 이후에 새로 들어온 입고분"으로 계산함 -
+        // 수정값을 새 입고가 통째로 덮어써버리면 안 되고, 그렇다고 수정 이전 입고까지 또 더하면 이중계산이 되므로.
+        var autoByDate = {};
+        v.expiries.forEach(function (e) {
+          if (!autoByDate[e.date]) autoByDate[e.date] = [];
+          autoByDate[e.date].push(e);
+        });
+        var mergedExpiries = [];
+        var handledDates = {};
+        if (state.manualExpiry && state.manualExpiry[v.barcode] && state.manualExpiry[v.barcode].length) {
+          state.manualExpiry[v.barcode].forEach(function (m) {
+            var autoList = autoByDate[m.date] || [];
+            var newInboundSinceEdit = 0;
+            if (m.setAt) {
+              autoList.forEach(function (a) { if (a.uploadedAt && a.uploadedAt > m.setAt) newInboundSinceEdit += (a.qty || 0); });
+            }
+            mergedExpiries.push({ date: m.date, qty: (m.qty || 0) + newInboundSinceEdit });
+            handledDates[m.date] = true;
+          });
+        }
+        Object.keys(autoByDate).forEach(function (d) {
+          if (handledDates[d]) return;
+          var allNull = autoByDate[d].every(function (a) { return a.qty === null || a.qty === undefined; });
+          var sum = allNull ? null : autoByDate[d].reduce(function (s, a) { return s + (a.qty || 0); }, 0);
+          mergedExpiries.push({ date: d, qty: sum });
+        });
+        v.expiries = mergedExpiries;
+        v.expiries.sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); });
+        // 소비기한별 수량이 하나만 비어있으면, 나머지 로트(기초재고+누적입고 총량 기준) 합을 뺀 나머지로 채움
+        // (비어있는 로트가 2개 이상이면 나눌 방법이 없어 그대로 둠)
+        var grossTotal = v.baseline + v.inbound;
+        var missingQtyLots = v.expiries.filter(function (e) { return e.qty === null || e.qty === undefined; });
+        if (missingQtyLots.length === 1) {
+          var knownGrossSum = v.expiries.reduce(function (s, e) { return s + (e.qty || 0); }, 0);
+          missingQtyLots[0].qty = grossTotal - knownGrossSum;
+        }
+        // 출고는 소비기한이 가장 빠른 로트부터 순서대로 차감(선입선출) - 로트별 합이 항상 현재고와 일치하도록 유지
+        // 소비기한을 화면에서 수기로 고친 적이 있으면, 그 시점 이후 출고분만 차감함(고친 시점 이전 출고까지 또 빼면 이중차감)
+        var expiryFixAt = state.expiryCorrectedAt && state.expiryCorrectedAt[v.barcode];
+        var toConsume = expiryFixAt ? (v.outboundSinceExpiryEdit || 0) : v.outbound;
+        v.expiries.forEach(function (lot) {
+          if (lot.qty == null || toConsume <= 0) return;
+          var deduct = Math.min(lot.qty, toConsume);
+          lot.qty -= deduct;
+          toConsume -= deduct;
+        });
+        v.expiries = v.expiries.filter(function (e) { return e.qty === null || e.qty === undefined || e.qty > 0; });
+        v.nearestExpiryDays = v.expiries.length ? expiryDays(v.expiries[0].date) : null;
+        return v;
+      });
+    if (currentSort === "expiry") {
+      list.sort(function (a, b) {
+        var da = a.nearestExpiryDays, db = b.nearestExpiryDays;
+        if (da === null && db === null) return 0;
+        if (da === null) return 1;
+        if (db === null) return -1;
+        return da - db;
+      });
+    } else {
+      list.sort(function (a, b) { return a.remaining - b.remaining; });
+    }
+    return list;
+  }
+
+  function expiryDays(expiryStr) {
+    var m = String(expiryStr).match(/(\d{2})\.(\d{2})\.(\d{2})/);
+    if (!m) return null;
+    var d = new Date(2000 + parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+    return Math.round((d - new Date()) / (1000 * 3600 * 24));
+  }
+  function expiryTier(days) {
+    if (days === null) return { cls: "neutral", label: "" };
+    if (days <= 30) return { cls: "info", label: "극임박" };
+    if (days <= 90) return { cls: "danger", label: "초임박" };
+    if (days <= 180) return { cls: "warn", label: "임박" };
+    return { cls: "neutral", label: "정상" };
+  }
+  var JUSTOK_EXTRA_NAMES = ["양꼬치시즈닝"]; // 이름에 "저스톡"이 없지만 저스톡 브랜드로 분류할 품목
+  function brandOf(name) {
+    var n = String(name || "");
+    if (n.indexOf("저스톡") !== -1) return "저스톡";
+    if (JUSTOK_EXTRA_NAMES.indexOf(n) !== -1) return "저스톡";
+    return "첫맛";
+  }
+
+  // ---------- 렌더 ----------
+  function renderAll() {
+    document.getElementById("last-updated").textContent = state.baseline
+      ? "기초재고 기준일: " + state.baseline.setAt + " (" + state.baseline.fileName + ")"
+      : "기초재고가 아직 설정되지 않았습니다";
+    renderStock();
+    renderBatchList("outbound");
+    renderBatchList("inbound");
+  }
+
+  function renderStock() {
+    var all = computeStock();
+    var byBrand = all.filter(function (i) { return currentBrand === "all" || brandOf(i.name) === currentBrand; });
+    var total = byBrand.length;
+    var dangerItems = byBrand.filter(function (i) { return i.status === "danger"; });
+    var warnItems = byBrand.filter(function (i) { return i.status === "warn"; });
+    var dangerCount = dangerItems.length;
+    var warnCount = warnItems.length;
+    var expiryCount = byBrand.filter(function (i) { return i.nearestExpiryDays !== null && i.nearestExpiryDays <= 180; }).length;
+
+    document.getElementById("stock-stats").innerHTML =
+      statCard("all", "전체 품목", total) +
+      statCard("danger", "품절/위험(출고 1주일 기준)", dangerCount, "danger") +
+      statCard("warn", "경고(출고 1개월 기준)", warnCount, "warn") +
+      statCard("expiry", "소비기한 임박(6개월내)", expiryCount, "info");
+    document.getElementById("stock-health-chart").innerHTML = healthDonut(total, dangerItems, warnItems);
+
+    var filtered = byBrand.filter(function (item) {
+      if (currentSearch && (item.name + item.barcode).toLowerCase().indexOf(currentSearch.toLowerCase()) === -1) return false;
+      if (currentFilter === "danger") return item.status === "danger";
+      if (currentFilter === "warn") return item.status === "warn";
+      if (currentFilter === "expiry") return item.nearestExpiryDays !== null && item.nearestExpiryDays <= 180;
+      return true;
+    });
+
+    var tbody = document.getElementById("stock-tbody");
+    if (filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8"><div class="empty">표시할 상품이 없습니다.' + (state.baseline ? "" : " 기초재고를 먼저 업로드해주세요.") + "</div></td></tr>";
+      return;
+    }
+    tbody.innerHTML = filtered.map(function (item) {
+      var expiryPill;
+      if (item.expiries && item.expiries.length) {
+        // 로트별 tier를 한 번만 계산해서 pill과 비율바 둘 다에 씀
+        var lotsWithTier = item.expiries.map(function (lot) { return { lot: lot, tier: expiryTier(expiryDays(lot.date)) }; });
+        var lotTotalQty = lotsWithTier.reduce(function (s, x) { return s + (x.lot.qty || 0); }, 0) || 1;
+        // 로트가 2개 이상일 때만 비율바 표시 - 하나뿐이면 굳이 100%짜리 바를 또 보여줄 필요 없음(가독성만 떨어짐)
+        var lotBar = lotsWithTier.length > 1 ? '<div class="lot-bar">' + lotsWithTier.map(function (x) {
+          var w = ((x.lot.qty || 0) / lotTotalQty * 100).toFixed(1);
+          // pill 색상(.pill.*)과 맞춤 - neutral엔 --neutral 변수가 없으니 border-strong으로 대체
+          var color = { info: "var(--info)", danger: "var(--danger)", warn: "var(--warn)" }[x.tier.cls] || "var(--border-strong)";
+          return '<span style="width:' + w + '%;background:' + color + '" title="' + x.lot.date + " " + (x.lot.qty || 0) + '개"></span>';
+        }).join("") + "</div>" : "";
+        expiryPill = lotBar + lotsWithTier.map(function (x) {
+          var lot = x.lot, tier = x.tier, d = expiryDays(lot.date);
+          var dLabel = d === null ? "" : " (D" + (d >= 0 ? "-" + d : "+" + -d) + ")";
+          var tierLabel = tier.label ? tier.label + " " : "";
+          var qtyLabel = lot.qty === null || lot.qty === undefined ? "" : " · " + lot.qty + "개";
+          return '<span class="pill ' + tier.cls + '" style="margin:1px 3px 1px 0;">' + tierLabel + lot.date + dLabel + qtyLabel + "</span>";
+        }).join("");
+      } else {
+        expiryPill = '<span class="pill neutral">-</span>';
+      }
+      expiryPill += '<button type="button" class="edit-expiry-link" data-edit-expiry="' + item.barcode + '">수정</button>';
+      var statusLabel = item.status === "warn" ? "경고(수요)"
+        : item.status !== "danger" ? "정상"
+        : (item.remaining <= 0 ? "품절" : item.stockoutRisk && !(item.dangerQty > 0 && item.remaining <= item.dangerQty) ? "품절위험(수요)" : "위험");
+      var statusTitle = "최근 " + STOCKOUT_RISK_DAYS + "일 출고 " + item.recent7d + "개 · 최근 " + WARN_RISK_DAYS + "일 출고 " + item.recent30d + "개";
+      return "<tr>" +
+        '<td><span class="pill ' + item.status + '" title="' + statusTitle + '">' + statusLabel + "</span></td>" +
+        '<td class="product-name">' + escapeHtml(item.name || "(이름없음)") + "</td>" +
+        '<td class="mono">' + item.barcode + "</td>" +
+        '<td class="mono">' + item.baseline + "</td>" +
+        '<td class="mono">' + item.outbound + "</td>" +
+        '<td class="mono">' + item.inbound + "</td>" +
+        '<td class="mono"><strong' + (item.stockOverridden ? ' title="자동계산값: ' + item.autoRemaining + '개 (수기로 수정됨)" style="color:var(--accent-2)"' : '') + '>' + item.remaining + "</strong>" +
+          '<button type="button" class="edit-expiry-link" data-edit-stock="' + item.barcode + '">수정</button></td>' +
+        "<td>" + expiryPill + "</td>" +
+        "</tr>";
+    }).join("");
+  }
+
+  // 전체 재고 상태를 도넛 한 장으로 - 숫자 카드 4개만으론 전체 비율이 한눈에 안 들어와서 추가.
+  // 옆에 실제로 뭐가 문제인지(품목명)도 몇 개 적어줘서, 몇 개인지만 보고 표를 또 뒤지지 않아도 되게 함.
+  function healthDonut(total, dangerItems, warnItems) {
+    if (!total) return "";
+    var danger = dangerItems.length, warn = warnItems.length, ok = total - danger - warn;
+    var r = 36, c = 2 * Math.PI * r, offset = 0;
+    var segs = [{ n: danger, color: "var(--danger)" }, { n: warn, color: "var(--warn)" }, { n: ok, color: "var(--ok)" }];
+    var rings = segs.filter(function (s) { return s.n > 0; }).map(function (s) {
+      var len = (s.n / total) * c;
+      var circle = '<circle cx="44" cy="44" r="' + r + '" fill="none" stroke="' + s.color + '" stroke-width="12" ' +
+        'stroke-dasharray="' + len + ' ' + (c - len) + '" stroke-dashoffset="' + -offset + '" transform="rotate(-90 44 44)"></circle>';
+      offset += len;
+      return circle;
+    }).join("");
+    var svg = '<svg width="88" height="88" viewBox="0 0 88 88">' + rings +
+      '<text x="44" y="41" text-anchor="middle" class="mono" style="font-size:19px;font-weight:700;fill:var(--ink)">' + total + '</text>' +
+      '<text x="44" y="56" text-anchor="middle" style="font-size:9.5px;fill:var(--ink-faint)">품목</text></svg>';
+    // 이름 눌러서 바로 검색창에 꽂히도록(문제 품목 찾아 스크롤할 필요 없게)
+    function issueLine(items, dotColor, label) {
+      if (!items.length) return "";
+      var shown = items.slice(0, 3);
+      var names = shown.map(function (i) {
+        return '<button type="button" class="issue-name" data-jump-search="' + escapeHtml(i.name) + '">' + escapeHtml(i.name) + "</button>";
+      }).join(", ");
+      var rest = items.length > shown.length ? " 외 " + (items.length - shown.length) + "건" : "";
+      return '<div class="issue-line"><span class="dot" style="background:' + dotColor + '"></span><b>' + label + "</b> " + names + rest + "</div>";
+    }
+    var issues = issueLine(dangerItems, "var(--danger)", "품절/위험:") + issueLine(warnItems, "var(--warn)", "경고:");
+    return svg + '<div class="health-legend">' +
+      '<div><span class="dot" style="background:var(--danger)"></span>품절/위험 <span class="n">' + danger + '</span>개</div>' +
+      '<div><span class="dot" style="background:var(--warn)"></span>경고 <span class="n">' + warn + '</span>개</div>' +
+      '<div><span class="dot" style="background:var(--ok)"></span>정상 <span class="n">' + ok + '</span>개</div>' +
+      "</div>" + (issues ? '<div class="health-issues">' + issues + "</div>" : "");
+  }
+
+  function statCard(filterKey, label, value, tone) {
+    var color = tone === "danger" ? "var(--danger)" : tone === "warn" ? "var(--warn)" : tone === "info" ? "var(--info)" : "var(--ink)";
+    var active = currentFilter === filterKey ? " active" : "";
+    return '<button type="button" class="stat' + active + '" data-filter="' + filterKey + '" style="--tone:' + color + '"><div class="label">' + label +
+      '</div><div class="value" style="color:' + color + '">' + value + "</div></button>";
+  }
+
+  function renderBatchList(kind) {
+    var batches = kind === "outbound" ? state.outboundBatches : state.inboundBatches;
+    var container = document.getElementById(kind + "-list");
+    if (batches.length === 0) { container.innerHTML = '<div class="empty">아직 첨부된 파일이 없습니다.</div>'; return; }
+    var sorted = batches.slice().reverse();
+    container.innerHTML = sorted.map(function (b) {
+      return '<div class="batch-card"><div><div class="name">' + escapeHtml(b.fileName) + '</div>' +
+        '<div class="meta">첨부일 ' + b.uploadedAt + " · 품목 " + b.rows.length + "건 · 합계수량 " + b.totalQty + '건</div></div>' +
+        '<button class="del-btn" data-kind="' + kind + '" data-id="' + b.id + '">삭제</button></div>';
+    }).join("");
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; });
+  }
+
+  // ---------- 소비기한 편집 모달 ----------
+  var editingBarcode = null;
+
+  // 소비기한을 수기로 고친 시점을 품목별로 기록 - computeStock()에서 그 시점 이후 출고분만
+  // 선입선출 차감에 반영하도록 쓰임(안 그러면 고치기 전 출고까지 또 빠져서 이중차감됨)
+  function markExpiryCorrected(barcode) {
+    if (!state.expiryCorrectedAt) state.expiryCorrectedAt = {};
+    state.expiryCorrectedAt[barcode] = todayLabel();
+  }
+
+  // 특정 날짜의 소비기한 수량을 수기로 고정값으로 박아넣음(자동계산값이든 기존 수기값이든 덮어씀).
+  // 선입선출이 아닌 로트에서 출고된 경우 이걸로 그 로트만 직접 고치면 됨.
+  function upsertManualExpiry(barcode, date, qty) {
+    if (!state.manualExpiry) state.manualExpiry = {};
+    if (!state.manualExpiry[barcode]) state.manualExpiry[barcode] = [];
+    var existing = state.manualExpiry[barcode].filter(function (e) { return e.date === date; })[0];
+    var setAt = todayLabel();
+    // setAt: 이 날짜 로트를 언제 수기로 고쳤는지 - computeStock()에서 "이 시점 이후 새로 들어온
+    // 입고만 이 수정값 위에 더해주는" 기준으로 씀 (안 그러면 새 입고가 수정값을 통째로 덮어써버림)
+    if (existing) { existing.qty = qty; existing.setAt = setAt; }
+    else state.manualExpiry[barcode].push({ date: date, qty: qty, setAt: setAt });
+    markExpiryCorrected(barcode);
+  }
+
+  function openExpiryModal(barcode) {
+    editingBarcode = barcode;
+    if (!state.manualExpiry) state.manualExpiry = {};
+    if (!state.manualExpiry[barcode]) state.manualExpiry[barcode] = [];
+    var stock = computeStock();
+    var item = stock.filter(function (i) { return i.barcode === barcode; })[0];
+    document.getElementById("expiry-modal-sub").textContent = (item ? item.name : barcode) + " (" + barcode + ")";
+    renderExpiryModalList();
+    document.getElementById("expiry-new-date").value = "";
+    document.getElementById("expiry-new-qty").value = "";
+    document.getElementById("expiry-modal").hidden = false;
+  }
+
+  function closeExpiryModal() {
+    document.getElementById("expiry-modal").hidden = true;
+    editingBarcode = null;
+    renderStock();
+  }
+
+  // 자동계산 로트 + 수기로 고친 로트를 합친, 실제 화면(상품행)에 보이는 것과 똑같은 현재 상태를 기준으로 그림.
+  // 이래야 "선입선출로 자동차감된" 로트도 여기서 바로 수량을 고칠 수 있음(예전엔 수기로 등록한 로트만 보였음).
+  function renderExpiryModalList() {
+    var stock = computeStock();
+    var item = stock.filter(function (i) { return i.barcode === editingBarcode; })[0];
+    var lots = item ? item.expiries.slice().sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); }) : [];
+    var list = document.getElementById("expiry-lot-list");
+    if (lots.length === 0) {
+      list.innerHTML = '<div class="lot-empty">등록된 소비기한이 없습니다.</div>';
+      return;
+    }
+    list.innerHTML = lots.map(function (lot) {
+      var qtyVal = lot.qty === null || lot.qty === undefined ? "" : lot.qty;
+      return '<div class="lot-row"><span class="lot-date">' + lot.date + '</span>' +
+        '<input type="number" class="lot-qty-input" data-edit-lot-date="' + lot.date + '" value="' + qtyVal + '" placeholder="수량">' +
+        '<button type="button" class="lot-remove" data-remove-lot-date="' + lot.date + '">×</button></div>';
+    }).join("");
+  }
+
+  function isValidDateStr(s) {
+    return /^\d{2}\.\d{2}\.\d{2}$/.test(s);
+  }
+
+  document.getElementById("expiry-add-btn").addEventListener("click", function () {
+    var dateVal = document.getElementById("expiry-new-date").value.trim();
+    var qtyVal = document.getElementById("expiry-new-qty").value.trim();
+    if (!isValidDateStr(dateVal)) { alert("날짜는 YY.MM.DD 형식으로 입력해주세요 (예: 27.03.15)"); return; }
+    upsertManualExpiry(editingBarcode, dateVal, qtyVal ? Number(qtyVal) : null);
+    document.getElementById("expiry-new-date").value = "";
+    document.getElementById("expiry-new-qty").value = "";
+    renderExpiryModalList();
+    persist();
+  });
+
+  document.getElementById("expiry-modal-close").addEventListener("click", closeExpiryModal);
+
+  // 로트 수량 칸을 직접 고치면(포커스를 벗어날 때) 바로 저장됨 - 선입선출이 아닌 로트에서 나간 경우를 위한 기능
+  document.getElementById("expiry-lot-list").addEventListener("change", function (e) {
+    var input = e.target.closest("[data-edit-lot-date]");
+    if (!input || !editingBarcode) return;
+    var val = input.value.trim();
+    upsertManualExpiry(editingBarcode, input.dataset.editLotDate, val === "" ? null : Number(val));
+    renderExpiryModalList();
+    persist();
+  });
+
+  document.getElementById("expiry-lot-list").addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-remove-lot-date]");
+    if (!btn || !editingBarcode) return;
+    // 자동계산 로트도 있을 수 있어서(state.manualExpiry에 실제로 없을 수도 있음) 배열에서 지우는 대신
+    // 수량 0으로 고정값을 박아서 항상 안 보이게 함
+    upsertManualExpiry(editingBarcode, btn.dataset.removeLotDate, 0);
+    renderExpiryModalList();
+    persist();
+  });
+
+  // ---------- 현재고 수정 모달 ----------
+  var editingStockBarcode = null;
+
+  function openStockModal(barcode) {
+    editingStockBarcode = barcode;
+    var stock = computeStock();
+    var item = stock.filter(function (i) { return i.barcode === barcode; })[0];
+    document.getElementById("stock-modal-sub").textContent = (item ? item.name : barcode) + " (" + barcode + ")" +
+      (item ? " · 자동계산값: " + item.autoRemaining + "개" : "");
+    document.getElementById("stock-new-qty").value = item ? item.remaining : "";
+    document.getElementById("stock-modal").hidden = false;
+  }
+
+  function closeStockModal() {
+    document.getElementById("stock-modal").hidden = true;
+    editingStockBarcode = null;
+  }
+
+  document.getElementById("stock-save-btn").addEventListener("click", function () {
+    var val = document.getElementById("stock-new-qty").value.trim();
+    if (val === "" || isNaN(Number(val))) { alert("숫자를 입력해주세요."); return; }
+    if (!state.manualStock) state.manualStock = {};
+    state.manualStock[editingStockBarcode] = { qty: Number(val), setAt: todayLabel() };
+    closeStockModal();
+    renderAll(); persist();
+  });
+  document.getElementById("stock-reset-btn").addEventListener("click", function () {
+    if (state.manualStock) delete state.manualStock[editingStockBarcode];
+    closeStockModal();
+    renderAll(); persist();
+  });
+  document.getElementById("stock-modal-close").addEventListener("click", closeStockModal);
+
+  // ---------- 이벤트 ----------
+  document.querySelectorAll(".tab-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.querySelectorAll(".tab-btn").forEach(function (b) { b.classList.remove("active"); });
+      document.querySelectorAll(".tab-panel").forEach(function (p) { p.classList.remove("active"); });
+      btn.classList.add("active");
+      document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
+    });
+  });
+  document.querySelectorAll(".brand-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.querySelectorAll(".brand-btn").forEach(function (b) { b.classList.remove("active"); });
+      btn.classList.add("active");
+      currentBrand = btn.dataset.brand;
+      renderStock();
+    });
+  });
+  document.querySelectorAll(".sort-chip").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.querySelectorAll(".sort-chip").forEach(function (b) { b.classList.remove("active"); });
+      btn.classList.add("active");
+      currentSort = btn.dataset.sort;
+      renderStock();
+    });
+  });
+  document.getElementById("stock-search").addEventListener("input", function (e) { currentSearch = e.target.value; renderStock(); });
+  document.getElementById("stock-health-chart").addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-jump-search]");
+    if (!btn) return;
+    currentSearch = btn.dataset.jumpSearch;
+    document.getElementById("stock-search").value = currentSearch;
+    renderStock();
+  });
+
+  function handleBaselineFile(file) {
+    if (!file) return;
+    readWorkbookFromFile(file, function (wb) {
+      try {
+        var items = parseBaseline(wb);
+        state.baseline = { setAt: todayLabel(), fileName: file.name, items: items };
+        state.outboundBatches = []; state.inboundBatches = [];
+        renderAll(); persist();
+        alert("첨부 완료: " + file.name + "\n기초재고 " + Object.keys(items).length + "개 품목으로 새로 설정됐습니다.\n(출고/입고 내역은 초기화됐습니다)");
+      } catch (err) { alert(err.message); }
+    });
+  }
+  function handleOutboundFile(file) {
+    if (!file) return;
+    readWorkbookFromFile(file, function (wb) {
+      try {
+        var rows = parseOutbound(wb);
+        var total = rows.reduce(function (s, r) { return s + r.qty; }, 0);
+        state.outboundBatches.push({ id: uid(), uploadedAt: todayLabel(), fileName: file.name, rows: rows, totalQty: total });
+        renderAll(); persist();
+        alert("첨부 완료: " + file.name + "\n출고 " + rows.length + "건, 총 " + total + "개 반영됐습니다.");
+      } catch (err) { alert(err.message); }
+    });
+  }
+  function handleInboundFile(file) {
+    if (!file) return;
+    readWorkbookFromFile(file, function (wb) {
+      try {
+        var rows = parseInbound(wb);
+        var total = rows.reduce(function (s, r) { return s + r.qty; }, 0);
+        state.inboundBatches.push({ id: uid(), uploadedAt: todayLabel(), fileName: file.name, rows: rows, totalQty: total });
+        renderAll(); persist();
+        alert("첨부 완료: " + file.name + "\n입고 " + rows.length + "건, 총 " + total + "개 반영됐습니다.");
+      } catch (err) { alert(err.message); }
+    });
+  }
+  document.getElementById("baseline-file").addEventListener("change", function (e) { handleBaselineFile(e.target.files[0]); e.target.value = ""; });
+  document.getElementById("outbound-file").addEventListener("change", function (e) { handleOutboundFile(e.target.files[0]); e.target.value = ""; });
+  document.getElementById("inbound-file").addEventListener("change", function (e) { handleInboundFile(e.target.files[0]); e.target.value = ""; });
+
+  // 파일 드래그해서 업로드
+  function wireDropZone(boxId, onFile) {
+    var box = document.getElementById(boxId);
+    if (!box) return;
+    ["dragenter", "dragover"].forEach(function (evt) {
+      box.addEventListener(evt, function (e) { e.preventDefault(); e.stopPropagation(); box.classList.add("drag-over"); });
+    });
+    ["dragleave", "dragend"].forEach(function (evt) {
+      box.addEventListener(evt, function (e) { e.preventDefault(); e.stopPropagation(); box.classList.remove("drag-over"); });
+    });
+    box.addEventListener("drop", function (e) {
+      e.preventDefault(); e.stopPropagation();
+      box.classList.remove("drag-over");
+      var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (file) onFile(file);
+    });
+  }
+  wireDropZone("baseline-upload-box", handleBaselineFile);
+  wireDropZone("outbound-upload-box", handleOutboundFile);
+  wireDropZone("inbound-upload-box", handleInboundFile);
+
+  document.body.addEventListener("click", function (e) {
+    if (e.target.classList.contains("del-btn")) {
+      var kind = e.target.dataset.kind, id = e.target.dataset.id;
+      var key = kind === "outbound" ? "outboundBatches" : "inboundBatches";
+      state[key] = state[key].filter(function (b) { return b.id !== id; });
+      renderAll(); persist();
+      return;
+    }
+    var statBtn = e.target.closest(".stat[data-filter]");
+    if (statBtn) { currentFilter = statBtn.dataset.filter; renderStock(); return; }
+    var editBtn = e.target.closest("[data-edit-expiry]");
+    if (editBtn) { openExpiryModal(editBtn.dataset.editExpiry); return; }
+    var editStockBtn = e.target.closest("[data-edit-stock]");
+    if (editStockBtn) { openStockModal(editStockBtn.dataset.editStock); }
+  });
+})();
+</script>
+</body>
+</html>
