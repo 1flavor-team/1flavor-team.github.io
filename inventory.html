@@ -826,7 +826,13 @@
         // 출고는 소비기한이 가장 빠른 로트부터 순서대로 차감(선입선출) - 로트별 합이 항상 현재고와 일치하도록 유지
         // 소비기한을 화면에서 수기로 고친 적이 있으면, 그 시점 이후 출고분만 차감함(고친 시점 이전 출고까지 또 빼면 이중차감)
         var expiryFixAt = state.expiryCorrectedAt && state.expiryCorrectedAt[v.barcode];
-        var toConsume = expiryFixAt ? (v.outboundSinceExpiryEdit || 0) : v.outbound;
+        // 소비기한이 없는 재고(기초재고 등, 로트로 잡히지 않은 수량)는 입고 로트보다 먼저 들어와 있었으므로 선입선출상 먼저 소진됨.
+        // 이걸 빼지 않고 출고 전체를 로트에서 차감하면, 실제 재고는 충분한데 로트 수량이 줄어드는 오류가 남.
+        var lotsSum = v.expiries.reduce(function (s, e) { return s + (e.qty || 0); }, 0);
+        var undatedStock = Math.max(0, grossTotal - lotsSum);
+        // 화면에서 소비기한을 수기로 입력한 품목은 그 입력값을 기준으로 기존처럼 출고 전체를 차감(수기 입력의 의미를 바꾸지 않음)
+        var hasManualLots = !!(state.manualExpiry && state.manualExpiry[v.barcode] && state.manualExpiry[v.barcode].length);
+        var toConsume = expiryFixAt ? (v.outboundSinceExpiryEdit || 0) : (hasManualLots ? v.outbound : Math.max(0, v.outbound - undatedStock));
         v.expiries.forEach(function (lot) {
           if (lot.qty == null || toConsume <= 0) return;
           var deduct = Math.min(lot.qty, toConsume);
