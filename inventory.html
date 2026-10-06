@@ -250,6 +250,9 @@
     cursor: pointer; padding: 2px 9px; margin-left: 3px; transition: filter .15s;
   }
   .edit-expiry-link:hover { filter: brightness(0.95); }
+  .fix-banner { font-size: 12.5px; font-weight: 600; padding: 8px 12px; border-radius: 8px; margin: 0 0 8px; }
+  .fix-banner.bad { background: var(--danger-soft); color: var(--danger); }
+  .fix-banner.ok { background: var(--surface-sunken); color: var(--ok); }
 
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(20,18,14,0.55); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
@@ -841,6 +844,9 @@
         });
         v.expiries = v.expiries.filter(function (e) { return e.qty === null || e.qty === undefined || e.qty > 0; });
         v.nearestExpiryDays = v.expiries.length ? expiryDays(v.expiries[0].date) : null;
+        v.lotSum = v.expiries.reduce(function (s, e) { return s + (e.qty || 0); }, 0);
+        // 수정필요: 현재고와 소비기한 로트 합계가 다른 품목(저스톡 제외). 재고 0이고 로트도 없으면 정상.
+        v.needFix = brandOf(v.name) !== "저스톡" && v.lotSum !== v.remaining && !(v.remaining <= 0 && v.lotSum === 0);
         return v;
       });
     if (currentSort === "expiry") {
@@ -896,10 +902,12 @@
     var warnItems = byBrand.filter(function (i) { return i.status === "warn"; });
     var dangerCount = dangerItems.length;
     var warnCount = warnItems.length;
+    var fixCount = byBrand.filter(function (i) { return i.needFix; }).length;
     var expiryCount = byBrand.filter(function (i) { return i.nearestExpiryDays !== null && i.nearestExpiryDays <= 180; }).length;
 
     document.getElementById("stock-stats").innerHTML =
       statCard("all", "전체 품목", total) +
+      statCard("fix", "수정필요(현재고≠소비기한)", fixCount, "danger") +
       statCard("danger", "품절/위험(출고 1주일 기준)", dangerCount, "danger") +
       statCard("warn", "경고(출고 1개월 기준)", warnCount, "warn") +
       statCard("expiry", "소비기한 임박(6개월내)", expiryCount, "info");
@@ -909,6 +917,7 @@
       if (currentSearch && (item.name + item.barcode).toLowerCase().indexOf(currentSearch.toLowerCase()) === -1) return false;
       if (currentFilter === "danger") return item.status === "danger";
       if (currentFilter === "warn") return item.status === "warn";
+      if (currentFilter === "fix") return item.needFix;
       if (currentFilter === "expiry") return item.nearestExpiryDays !== null && item.nearestExpiryDays <= 180;
       return true;
     });
@@ -940,6 +949,10 @@
         }).join("");
       } else {
         expiryPill = '<span class="pill neutral">-</span>';
+      }
+      if (item.needFix) {
+        var gap = item.remaining - item.lotSum;
+        expiryPill = '<div><span class="pill danger" title="현재고 ' + item.remaining + ' / 소비기한 합계 ' + item.lotSum + '">수정필요 · 소비기한 합 ' + item.lotSum + ' / 현재고 ' + item.remaining + ' (' + (gap > 0 ? '+' : '') + gap + ')</span></div>' + expiryPill;
       }
       expiryPill += '<button type="button" class="edit-expiry-link" data-edit-expiry="' + item.barcode + '">수정</button>';
       var statusLabel = item.status === "warn" ? "경고(수요)"
@@ -1068,11 +1081,18 @@
     var item = stock.filter(function (i) { return i.barcode === editingBarcode; })[0];
     var lots = item ? item.expiries.slice().sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); }) : [];
     var list = document.getElementById("expiry-lot-list");
+    var fixBanner = "";
+    if (item) {
+      var mgap = item.remaining - item.lotSum;
+      fixBanner = item.needFix
+        ? '<div class="fix-banner bad">⚠ 수정필요 - 소비기한 합계 ' + item.lotSum + ' / 현재고 ' + item.remaining + ' (' + (mgap > 0 ? '날짜 없는 수량 ' + mgap + '개' : '소비기한이 ' + (-mgap) + '개 더 많음') + ')</div>'
+        : '<div class="fix-banner ok">✓ 현재고와 소비기한 합계가 일치합니다 (' + item.remaining + ')</div>';
+    }
     if (lots.length === 0) {
-      list.innerHTML = '<div class="lot-empty">등록된 소비기한이 없습니다.</div>';
+      list.innerHTML = fixBanner + '<div class="lot-empty">등록된 소비기한이 없습니다.</div>';
       return;
     }
-    list.innerHTML = lots.map(function (lot) {
+    list.innerHTML = fixBanner + lots.map(function (lot) {
       var qtyVal = lot.qty === null || lot.qty === undefined ? "" : lot.qty;
       return '<div class="lot-row"><span class="lot-date">' + lot.date + '</span>' +
         '<input type="number" class="lot-qty-input" data-edit-lot-date="' + lot.date + '" value="' + qtyVal + '" placeholder="수량">' +
