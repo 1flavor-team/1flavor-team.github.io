@@ -726,13 +726,15 @@
         if (r.date && r.date >= cutoff) map[key].recent7d += r.qty;
         if (r.date && r.date >= cutoff30) map[key].recent30d += r.qty;
         if (r.name && !map[key].name) map[key].name = r.name;
+        // 출고일자(r.date)가 수정일과 같거나 이전이어도 수정 "이후에 첨부된" 출고파일(batch.uploadedAt)이면 차감 대상 -
+        // 안 그러면 수정 후 넣은 출고파일의 어제/그제 출고분이 로트에서 안 빠짐.
         // 현재고/소비기한을 화면에서 수기로 고쳐둔 시점(setAt) 이후에 찍힌 출고만 따로 집계해둠 -
         // 수기 수정값은 "그 시점의 실제 수량"이므로, 그 이후 출고분만 거기서 계속 빼줘야 함.
         var stockEdit = state.manualStock && state.manualStock[key];
         var stockSetAt = stockEdit && typeof stockEdit === "object" ? stockEdit.setAt : null;
-        if (r.date && stockSetAt && r.date > stockSetAt) map[key].outboundSinceStockEdit = (map[key].outboundSinceStockEdit || 0) + r.qty;
+        if (stockSetAt && ((r.date && r.date > stockSetAt) || batch.uploadedAt > stockSetAt)) map[key].outboundSinceStockEdit = (map[key].outboundSinceStockEdit || 0) + r.qty;
         var expirySetAt = state.expiryCorrectedAt && state.expiryCorrectedAt[key];
-        if (r.date && expirySetAt && r.date > expirySetAt) map[key].outboundSinceExpiryEdit = (map[key].outboundSinceExpiryEdit || 0) + r.qty;
+        if (expirySetAt && ((r.date && r.date > expirySetAt) || batch.uploadedAt > expirySetAt)) map[key].outboundSinceExpiryEdit = (map[key].outboundSinceExpiryEdit || 0) + r.qty;
       });
     });
     state.inboundBatches.forEach(function (batch) {
