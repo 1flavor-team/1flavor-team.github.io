@@ -198,19 +198,19 @@
 
   .table-scroll {
     border: 1px solid var(--border); border-radius: var(--radius);
-    box-shadow: var(--shadow); background: var(--surface);
+    box-shadow: var(--shadow); background: var(--surface); overflow-x: auto;
   }
   table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 780px; }
   thead th {
     text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); font-weight: 700;
-    background: var(--surface-sunken); padding: 14px 18px; border-bottom: 1.5px solid var(--border-strong); white-space: nowrap;
+    background: var(--surface-sunken); padding: 13px 12px; border-bottom: 1.5px solid var(--border-strong); white-space: nowrap;
     position: sticky; top: 0; z-index: 3; border-right: 1px solid var(--border);
   }
   tbody td {
-    padding: 15px 18px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); vertical-align: middle;
+    padding: 13px 12px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); vertical-align: middle;
   }
   thead th:last-child, tbody td:last-child { border-right: none; }
-  tbody td.product-name { white-space: nowrap; }
+  tbody td.product-name { min-width: 150px; }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr { transition: background .1s; }
   tbody tr:nth-child(even) { background: color-mix(in srgb, var(--surface-sunken) 40%, transparent); }
@@ -245,7 +245,7 @@
   .save-status::before { content: "✓"; }
   .save-status.show { opacity: 1; transform: none; }
 
-  .edit-expiry-link {
+  .edit-expiry-link { white-space: nowrap;
     font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border: none; border-radius: 100px;
     cursor: pointer; padding: 2px 9px; margin-left: 3px; transition: filter .15s;
   }
