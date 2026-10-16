@@ -518,6 +518,24 @@
     var d = new Date();
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   }
+  // 날짜+시각 "2026-10-15T17:31:48" - 수기 수정과 파일 첨부가 같은 날이어도 어느 쪽이 먼저인지 구분하려고 씀
+  function stampOf(d) {
+    var p = function (n) { return String(n).padStart(2, "0"); };
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+  }
+  function nowStamp() { return stampOf(new Date()); }
+  // 파일 첨부 시각: 새 파일은 at, 예전 파일은 id 앞부분(Date.now 36진수)에서 복원
+  function batchAt(b) {
+    if (b.at) return b.at;
+    var t = b.id ? parseInt(String(b.id).slice(0, 8), 36) : NaN;
+    return t > 1.6e12 && t < 4e12 ? stampOf(new Date(t)) : b.uploadedAt;
+  }
+  // 수기 수정(setAt) 이후에 첨부된 파일인지 - 둘 다 시각이 있으면 시각으로 비교.
+  // 예전 수정값처럼 날짜만 있으면 같은 날 첨부도 "이후"로 봄(보통 낮에 수정하고 퇴근 전에 출고파일을 올리므로)
+  function attachedAfter(at, setAt) {
+    at = String(at || ""); setAt = String(setAt || "");
+    return at.length > 10 && setAt.length > 10 ? at > setAt : at.slice(0, 10) >= setAt.slice(0, 10);
+  }
 
   // ---------- 파싱 ----------
   function parseBaseline(wb) {
@@ -698,9 +716,9 @@
         // 수기 수정값은 "그 시점의 실제 수량"이므로, 그 이후 출고분만 거기서 계속 빼줘야 함.
         var stockEdit = state.manualStock && state.manualStock[key];
         var stockSetAt = stockEdit && typeof stockEdit === "object" ? stockEdit.setAt : null;
-        if (stockSetAt && ((r.date && r.date > stockSetAt) || batch.uploadedAt > stockSetAt)) map[key].outboundSinceStockEdit = (map[key].outboundSinceStockEdit || 0) + r.qty;
+        if (stockSetAt && ((r.date && r.date > stockSetAt.slice(0, 10)) || attachedAfter(batchAt(batch), stockSetAt))) map[key].outboundSinceStockEdit = (map[key].outboundSinceStockEdit || 0) + r.qty;
         var expirySetAt = state.expiryCorrectedAt && state.expiryCorrectedAt[key];
-        if (expirySetAt && ((r.date && r.date > expirySetAt) || batch.uploadedAt > expirySetAt)) map[key].outboundSinceExpiryEdit = (map[key].outboundSinceExpiryEdit || 0) + r.qty;
+        if (expirySetAt && ((r.date && r.date > expirySetAt.slice(0, 10)) || attachedAfter(batchAt(batch), expirySetAt))) map[key].outboundSinceExpiryEdit = (map[key].outboundSinceExpiryEdit || 0) + r.qty;
       });
     });
     state.inboundBatches.forEach(function (batch) {
@@ -712,18 +730,18 @@
         // 입고쪽 r.date는 "No." 컬럼이라 실제 날짜가 아님 - 대신 파일 첨부일(batch.uploadedAt) 기준으로 판단
         var stockEdit2 = state.manualStock && state.manualStock[key];
         var stockSetAt2 = stockEdit2 && typeof stockEdit2 === "object" ? stockEdit2.setAt : null;
-        if (stockSetAt2 && batch.uploadedAt > stockSetAt2) map[key].inboundSinceStockEdit = (map[key].inboundSinceStockEdit || 0) + r.qty;
+        if (stockSetAt2 && attachedAfter(batchAt(batch), stockSetAt2)) map[key].inboundSinceStockEdit = (map[key].inboundSinceStockEdit || 0) + r.qty;
         if (r.expiry) {
-          map[key].expiries.push({ date: r.expiry, qty: r.qty, uploadedAt: batch.uploadedAt });
+          map[key].expiries.push({ date: r.expiry, qty: r.qty, uploadedAt: batchAt(batch) });
         } else if (r.lots && r.lots.length) {
           if (r.lots.length === 1 && r.lots[0].boxes == null && r.lots[0].units == null) {
             // 비고에 날짜 하나만 있고 수량 표기가 없으면 그 행 전체 수량이 그 날짜 소비기한
-            map[key].expiries.push({ date: r.lots[0].date, qty: r.qty, uploadedAt: batch.uploadedAt });
+            map[key].expiries.push({ date: r.lots[0].date, qty: r.qty, uploadedAt: batchAt(batch) });
           } else {
             var perBox = UNITS_PER_BOX[key];
             r.lots.forEach(function (lot) {
               var lotQty = lot.units != null ? lot.units : (lot.boxes != null && perBox ? lot.boxes * perBox : null);
-              map[key].expiries.push({ date: lot.date, qty: lotQty, boxes: lot.boxes, uploadedAt: batch.uploadedAt });
+              map[key].expiries.push({ date: lot.date, qty: lotQty, boxes: lot.boxes, uploadedAt: batchAt(batch) });
             });
           }
         }
@@ -772,7 +790,7 @@
             var autoList = autoByDate[m.date] || [];
             var newInboundSinceEdit = 0;
             if (m.setAt) {
-              autoList.forEach(function (a) { if (a.uploadedAt && a.uploadedAt > m.setAt) newInboundSinceEdit += (a.qty || 0); });
+              autoList.forEach(function (a) { if (a.uploadedAt && attachedAfter(a.uploadedAt, m.setAt)) newInboundSinceEdit += (a.qty || 0); });
             }
             mergedExpiries.push({ date: m.date, qty: (m.qty || 0) + newInboundSinceEdit });
             handledDates[m.date] = true;
@@ -1006,7 +1024,7 @@
   // 선입선출 차감에 반영하도록 쓰임(안 그러면 고치기 전 출고까지 또 빠져서 이중차감됨)
   function markExpiryCorrected(barcode) {
     if (!state.expiryCorrectedAt) state.expiryCorrectedAt = {};
-    state.expiryCorrectedAt[barcode] = todayLabel();
+    state.expiryCorrectedAt[barcode] = nowStamp();
   }
 
   // 특정 날짜의 소비기한 수량을 수기로 고정값으로 박아넣음(자동계산값이든 기존 수기값이든 덮어씀).
@@ -1015,7 +1033,7 @@
     if (!state.manualExpiry) state.manualExpiry = {};
     if (!state.manualExpiry[barcode]) state.manualExpiry[barcode] = [];
     var existing = state.manualExpiry[barcode].filter(function (e) { return e.date === date; })[0];
-    var setAt = todayLabel();
+    var setAt = nowStamp();
     // setAt: 이 날짜 로트를 언제 수기로 고쳤는지 - computeStock()에서 "이 시점 이후 새로 들어온
     // 입고만 이 수정값 위에 더해주는" 기준으로 씀 (안 그러면 새 입고가 수정값을 통째로 덮어써버림)
     if (existing) { existing.qty = qty; existing.setAt = setAt; }
@@ -1127,7 +1145,7 @@
     var val = document.getElementById("stock-new-qty").value.trim();
     if (val === "" || isNaN(Number(val))) { alert("숫자를 입력해주세요."); return; }
     if (!state.manualStock) state.manualStock = {};
-    state.manualStock[editingStockBarcode] = { qty: Number(val), setAt: todayLabel() };
+    state.manualStock[editingStockBarcode] = { qty: Number(val), setAt: nowStamp() };
     closeStockModal();
     renderAll(); persist();
   });
@@ -1190,7 +1208,7 @@
       try {
         var rows = parseOutbound(wb);
         var total = rows.reduce(function (s, r) { return s + r.qty; }, 0);
-        state.outboundBatches.push({ id: uid(), uploadedAt: todayLabel(), fileName: file.name, rows: rows, totalQty: total });
+        state.outboundBatches.push({ id: uid(), uploadedAt: todayLabel(), at: nowStamp(), fileName: file.name, rows: rows, totalQty: total });
         renderAll(); persist();
         alert("첨부 완료: " + file.name + "\n출고 " + rows.length + "건, 총 " + total + "개 반영됐습니다.");
       } catch (err) { alert(err.message); }
@@ -1202,7 +1220,7 @@
       try {
         var rows = parseInbound(wb);
         var total = rows.reduce(function (s, r) { return s + r.qty; }, 0);
-        state.inboundBatches.push({ id: uid(), uploadedAt: todayLabel(), fileName: file.name, rows: rows, totalQty: total });
+        state.inboundBatches.push({ id: uid(), uploadedAt: todayLabel(), at: nowStamp(), fileName: file.name, rows: rows, totalQty: total });
         renderAll(); persist();
         alert("첨부 완료: " + file.name + "\n입고 " + rows.length + "건, 총 " + total + "개 반영됐습니다.");
       } catch (err) { alert(err.message); }
