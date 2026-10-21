@@ -341,9 +341,9 @@
 
     <section class="tab-panel" id="panel-outbound">
       <div class="upload-box" id="outbound-upload-box">
-        <label class="btn" for="outbound-file">출고 엑셀 첨부</label>
+        <label class="btn" for="outbound-file">출고 파일 첨부 (재고수불부)</label>
         <input type="file" id="outbound-file" accept=".xls,.xlsx">
-        <div class="hint">더존 출고현황 엑셀을 그대로 업로드하세요. 업로드할 때마다 누적됩니다. 파일을 이 박스로 드래그해서 놓아도 됩니다.</div>
+        <div class="hint">이지어드민 재고수불부 파일을 그대로 업로드하세요(예전 더존 출고현황 엑셀도 됩니다). 퇴근 전에 하루 한 번, 지난 업로드 다음 날부터 오늘까지로 받아 올리면 됩니다. 업로드할 때마다 누적됩니다. 파일을 이 박스로 드래그해서 놓아도 됩니다.</div>
       </div>
       <div id="outbound-list"></div>
     </section>
@@ -492,6 +492,13 @@
     var reader = new FileReader();
     reader.onload = function (e) {
       var data = new Uint8Array(e.target.result);
+      // 이지어드민 재고수불부 같은 "HTML 표로 된 .xls"는 앞에 공백·meta 가 붙어 있어 그대로 읽으면 표가 아니라 글자 줄로 읽힘
+      // → 진짜 엑셀(xlsx=PK, xls=D0CF)이 아니고 <table 이 있으면 표 부분부터 HTML 로 읽음
+      var bin = (data[0] === 0x50 && data[1] === 0x4B) || (data[0] === 0xD0 && data[1] === 0xCF);
+      if (!bin) {
+        var text = new TextDecoder("utf-8").decode(data), t = text.indexOf("<table");
+        if (t !== -1) return callback(XLSX.read("<html><body>" + text.slice(t), { type: "string" }));
+      }
       callback(XLSX.read(data, { type: "array" }));
     };
     reader.readAsArrayBuffer(file);
@@ -565,9 +572,25 @@
     var n = String(name || "");
     return NON_PRODUCT_NAME_HINTS.some(function (hint) { return n.indexOf(hint) !== -1; });
   }
+  // 이지어드민 "재고수불부" (상품코드·상품명·일자·입고·출고·배송·…·바코드). 품목마다 날짜 줄 + 날짜 빈 소계 줄이 짝으로 나와서
+  // 날짜 있는 줄만 씀(소계까지 세면 두 배). 실제로 나간 수량 = 출고 + 배송. 입고는 입고파일로 따로 반영하므로 여기선 안 씀.
+  function parseLedger(rows) {
+    var h = rows[0] || [];
+    var idx = { barcode: findCol(h, ["바코드"]), name: findCol(h, ["상품명"]), date: findCol(h, ["일자"]), out: findCol(h, ["출고"]), ship: findCol(h, ["배송"]) };
+    if (idx.barcode === -1 || idx.date === -1 || idx.ship === -1) throw new Error("재고수불부 형식이 맞는지 확인해주세요 (바코드/일자/배송 컬럼을 못 찾음)");
+    var out = [];
+    for (var i = 1; i < rows.length; i++) {
+      var r = rows[i], date = normalizeDateVal(r[idx.date]), barcode = r[idx.barcode];
+      if (!date || !barcode) continue;
+      var qty = (Number(r[idx.ship]) || 0) + (idx.out !== -1 ? Number(r[idx.out]) || 0 : 0);
+      if (qty) out.push({ barcode: String(barcode).trim(), name: idx.name !== -1 ? String(r[idx.name] || "").trim() : "", qty: qty, date: date });
+    }
+    return out;
+  }
   function parseOutbound(wb) {
     var rows = sheetRows(wb);
     var header = rows[0] || [];
+    if (header.indexOf("배송") !== -1 && header.indexOf("바코드") !== -1) return parseLedger(rows);   // 재고수불부
     var idx = { barcode: findCol(header, ["품번"]), name: findCol(header, ["품명"]), qty: findCol(header, ["출고수량"]), date: findCol(header, ["출고일자"]) };
     if (idx.barcode === -1 || idx.qty === -1) throw new Error("출고 엑셀 형식이 맞는지 확인해주세요 (품번/출고수량 컬럼을 못 찾음)");
     var out = [];
@@ -1207,6 +1230,10 @@
     readWorkbookFromFile(file, function (wb) {
       try {
         var rows = parseOutbound(wb);
+        // 이미 올린 날짜가 또 들어 있으면 같은 날 출고가 두 번 빠지므로 확인 (같은 날 낮에 한 번, 퇴근 전에 또 올리는 경우 등)
+        var seen = {}; state.outboundBatches.forEach(function (b) { b.rows.forEach(function (r) { if (r.date) seen[r.date] = true; }); });
+        var dup = Array.from(new Set(rows.map(function (r) { return r.date; }).filter(function (d) { return d && seen[d]; }))).sort();
+        if (dup.length && !confirm("이미 올린 날짜가 들어 있습니다: " + dup.join(", ") + "\n그대로 올리면 그 날짜 출고가 두 번 빠집니다.\n\n그래도 올릴까요? (보통은 '취소' 후 출고내역 관리에서 겹치는 파일을 지우고 다시 올리세요)")) return;
         var total = rows.reduce(function (s, r) { return s + r.qty; }, 0);
         state.outboundBatches.push({ id: uid(), uploadedAt: todayLabel(), at: nowStamp(), fileName: file.name, rows: rows, totalQty: total });
         renderAll(); persist();
