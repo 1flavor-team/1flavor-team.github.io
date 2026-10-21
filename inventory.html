@@ -1213,13 +1213,32 @@
     renderStock();
   });
 
+  // 기초재고를 새로 잡을 때 소비기한 로트를 이어가기: 출고·입고 내역이 지워지면 그동안 로트에서 뺀 출고분도 같이 사라져
+  // 로트가 옛 수량으로 되돌아가므로(수정필요 대량 발생), 지금 계산된 로트(출고 차감 후)를 수기 로트로 고정해 둠.
+  // 새 기초재고보다 로트 합이 많으면 그 차이(그 사이 나간 양)를 소비기한 빠른 것부터 뺌. 적으면 그대로(수정필요로 표시됨).
+  function carryLotsToNewBaseline(newItems) {
+    var now = nowStamp(), manual = {}, fixedAt = {};
+    computeStock().forEach(function (v) {
+      var target = newItems[v.barcode] ? newItems[v.barcode].qty : null;
+      var lots = (v.expiries || []).filter(function (e) { return e.qty != null && e.qty > 0; }).map(function (e) { return { date: e.date, qty: e.qty }; });
+      if (target === null || !lots.length) return;
+      var over = Math.max(0, lots.reduce(function (s, e) { return s + e.qty; }, 0) - Math.max(0, target));
+      lots.forEach(function (l) { var d = Math.min(l.qty, over); l.qty -= d; over -= d; });
+      manual[v.barcode] = lots.filter(function (l) { return l.qty > 0; }).map(function (l) { return { date: l.date, qty: l.qty, setAt: now }; });
+      fixedAt[v.barcode] = now;
+    });
+    return { manual: manual, fixedAt: fixedAt };
+  }
   function handleBaselineFile(file) {
     if (!file) return;
     readWorkbookFromFile(file, function (wb) {
       try {
         var items = parseBaseline(wb);
+        var lots = carryLotsToNewBaseline(items);   // 출고·입고 내역을 지우기 전에, 지금까지 계산된 로트를 새 기준으로 옮겨 둠
         state.baseline = { setAt: todayLabel(), fileName: file.name, items: items };
         state.outboundBatches = []; state.inboundBatches = [];
+        state.manualStock = {};   // 새 기초재고가 최신 실제 수량이므로 예전 현재고 수기 수정은 버림
+        state.manualExpiry = lots.manual; state.expiryCorrectedAt = lots.fixedAt;
         renderAll(); persist();
         alert("첨부 완료: " + file.name + "\n기초재고 " + Object.keys(items).length + "개 품목으로 새로 설정됐습니다.\n(출고/입고 내역은 초기화됐습니다)");
       } catch (err) { alert(err.message); }
@@ -1234,6 +1253,10 @@
         var seen = {}; state.outboundBatches.forEach(function (b) { b.rows.forEach(function (r) { if (r.date) seen[r.date] = true; }); });
         var dup = Array.from(new Set(rows.map(function (r) { return r.date; }).filter(function (d) { return d && seen[d]; }))).sort();
         if (dup.length && !confirm("이미 올린 날짜가 들어 있습니다: " + dup.join(", ") + "\n그대로 올리면 그 날짜 출고가 두 번 빠집니다.\n\n그래도 올릴까요? (보통은 '취소' 후 출고내역 관리에서 겹치는 파일을 지우고 다시 올리세요)")) return;
+        // 기초재고(현재고조회)를 잡은 날과 그 이전 출고는 이미 기초재고에 빠져 있음 → 또 올리면 두 번 빠짐
+        var baseDay = state.baseline && state.baseline.setAt ? String(state.baseline.setAt).slice(0, 10) : "";
+        var early = Array.from(new Set(rows.map(function (r) { return r.date; }).filter(function (d) { return d && baseDay && d <= baseDay; }))).sort();
+        if (early.length && !confirm("기초재고(" + baseDay + ")에 이미 반영된 날짜가 들어 있습니다: " + early.join(", ") + "\n그대로 올리면 그 날짜 출고가 두 번 빠집니다.\n\n그래도 올릴까요? (보통은 '취소' 후 기초재고 다음 날부터로 다시 받아 올리세요)")) return;
         var total = rows.reduce(function (s, r) { return s + r.qty; }, 0);
         state.outboundBatches.push({ id: uid(), uploadedAt: todayLabel(), at: nowStamp(), fileName: file.name, rows: rows, totalQty: total });
         renderAll(); persist();
