@@ -460,6 +460,22 @@
     await loadState();
     migrateManualExpiry();
     renderAll();
+    // 이 화면을 오래 열어 두면 처음 받은 옛 내용으로 다른 곳(다른 PC·오피스·정리 작업)의 저장을 덮어쓸 수 있음 →
+    // 화면으로 돌아올 때와 30초마다 서버 최신본으로 갱신 (수정 창이 열려 있거나 저장 중이면 건너뜀)
+    var saving = 0;
+    var origPersist = persist;
+    persist = function () { saving++; return origPersist().finally(function () { saving--; }); };
+    async function refresh() {
+      if (document.hidden || saving || !document.getElementById("expiry-modal").hidden || !document.getElementById("stock-modal").hidden) return;
+      try {
+        var res = await fetch(WORKER_URL, { cache: "no-store" }); var fresh = await res.json();
+        if (saving || JSON.stringify(fresh) === JSON.stringify(state)) return;
+        state = fresh; migrateManualExpiry(); renderAll();
+      } catch (e) { /* 다음에 다시 */ }
+    }
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    setInterval(refresh, 30000);
   }
 
   // 최초 1회: 구글시트 참고 소비기한(SEED_EXPIRY, 상품명 기준)을 바코드 기준 수정가능 데이터로 옮겨줌.
