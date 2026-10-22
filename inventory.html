@@ -589,16 +589,17 @@
     return NON_PRODUCT_NAME_HINTS.some(function (hint) { return n.indexOf(hint) !== -1; });
   }
   // 이지어드민 "재고수불부" (상품코드·상품명·일자·입고·출고·배송·…·바코드). 품목마다 날짜 줄 + 날짜 빈 소계 줄이 짝으로 나와서
-  // 날짜 있는 줄만 씀(소계까지 세면 두 배). 실제로 나간 수량 = 출고 + 배송. 입고는 입고파일로 따로 반영하므로 여기선 안 씀.
+  // 날짜 있는 줄만 씀(소계까지 세면 두 배). 실제로 나간 수량 = 출고 + 배송 - 반품입고(반품으로 되돌아온 수량은 재고에 더함).
+  // 일반 입고는 입고파일로 따로 반영하므로 여기선 안 씀(쓰면 이중계산).
   function parseLedger(rows) {
     var h = rows[0] || [];
-    var idx = { barcode: findCol(h, ["바코드"]), name: findCol(h, ["상품명"]), date: findCol(h, ["일자"]), out: findCol(h, ["출고"]), ship: findCol(h, ["배송"]) };
+    var idx = { barcode: findCol(h, ["바코드"]), name: findCol(h, ["상품명"]), date: findCol(h, ["일자"]), out: findCol(h, ["출고"]), ship: findCol(h, ["배송"]), ret: findCol(h, ["반품입고"]) };
     if (idx.barcode === -1 || idx.date === -1 || idx.ship === -1) throw new Error("재고수불부 형식이 맞는지 확인해주세요 (바코드/일자/배송 컬럼을 못 찾음)");
     var out = [];
     for (var i = 1; i < rows.length; i++) {
       var r = rows[i], date = normalizeDateVal(r[idx.date]), barcode = r[idx.barcode];
       if (!date || !barcode) continue;
-      var qty = (Number(r[idx.ship]) || 0) + (idx.out !== -1 ? Number(r[idx.out]) || 0 : 0);
+      var qty = (Number(r[idx.ship]) || 0) + (idx.out !== -1 ? Number(r[idx.out]) || 0 : 0) - (idx.ret !== -1 ? Number(r[idx.ret]) || 0 : 0);
       if (qty) out.push({ barcode: String(barcode).trim(), name: idx.name !== -1 ? String(r[idx.name] || "").trim() : "", qty: qty, date: date });
     }
     return out;
