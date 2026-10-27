@@ -137,6 +137,10 @@
   }
   .stat::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--tone, var(--ink-faint)); opacity: .55; }
   .stat:hover { box-shadow: var(--shadow-lift); transform: translateY(-1px); }
+  div.stat { cursor: default; }
+  div.stat:hover { box-shadow: var(--shadow); transform: none; }
+  .stat .sub { font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; }
+  .kpi-period { font-size: 12.5px; color: var(--ink-faint); }
   .stat .label { font-size: 11.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
   .stat .value { font-family: "Inter", "Noto Sans KR", sans-serif; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; font-size: 26px; font-weight: 700; margin-top: 5px; }
   .stat.active { border-color: var(--tone, var(--accent)); box-shadow: var(--shadow-lift); }
@@ -311,6 +315,7 @@
       <button class="tab-btn active" data-tab="stock">첫맛 현재고</button>
       <button class="tab-btn" data-tab="outbound">출고내역 관리</button>
       <button class="tab-btn" data-tab="inbound">입고내역 관리</button>
+      <button class="tab-btn" data-tab="kpi">KPI 리포트</button>
     </div>
 
     <section class="tab-panel active" id="panel-stock">
@@ -355,6 +360,22 @@
         <div class="hint">재고이동전표(전체 입고 수량 시트) 또는 개별 입고 엑셀을 업로드하세요. 파일을 이 박스로 드래그해서 놓아도 됩니다.</div>
       </div>
       <div id="inbound-list"></div>
+    </section>
+
+    <section class="tab-panel" id="panel-kpi">
+      <div class="stat-row" id="kpi-stats"></div>
+      <div class="toolbar">
+        <span class="kpi-period" id="kpi-period"></span>
+        <button class="filter-chip" id="kpi-download" style="margin-left:auto">엑셀 다운로드</button>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>상품명</th><th>이번주 출고</th><th>지난주 출고</th><th>증감</th><th>일평균 출고</th><th>현재고</th><th>재고일수</th><th>소진율</th><th>회전율</th></tr>
+          </thead>
+          <tbody id="kpi-tbody"></tbody>
+        </table>
+      </div>
     </section>
   </div>
 </div>
@@ -712,6 +733,7 @@
     var cutoff = sevenDaysAgo.getFullYear() + "-" + String(sevenDaysAgo.getMonth() + 1).padStart(2, "0") + "-" + String(sevenDaysAgo.getDate()).padStart(2, "0");
     var thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - (WARN_RISK_DAYS - 1));
+    var cutoff14 = ymd(addDays(new Date(), -(STOCKOUT_RISK_DAYS * 2 - 1)));
     var cutoff30 = thirtyDaysAgo.getFullYear() + "-" + String(thirtyDaysAgo.getMonth() + 1).padStart(2, "0") + "-" + String(thirtyDaysAgo.getDate()).padStart(2, "0");
     // 기초재고를 설정한 지 며칠 안 됐으면(예: 오늘 막 리셋) 출고 데이터가 하루이틀치뿐이라
     // 주말 몰아치기 같은 것 때문에 품절위험/경고가 잘못 뜰 수 있어서, 최소 며칠치 데이터가 쌓이기 전엔 판정하지 않음
@@ -749,6 +771,7 @@
         map[key].outbound += r.qty;
         if (r.date && r.date >= cutoff) map[key].recent7d += r.qty;
         if (r.date && r.date >= cutoff30) map[key].recent30d += r.qty;
+        if (r.date && r.date >= cutoff14 && r.date < cutoff) map[key].prev7d = (map[key].prev7d || 0) + r.qty; // KPI 리포트 지난주 출고
         if (r.name && !map[key].name) map[key].name = r.name;
         // 출고일자(r.date)가 수정일과 같거나 이전이어도 수정 "이후에 첨부된" 출고파일(batch.uploadedAt)이면 차감 대상 -
         // 안 그러면 수정 후 넣은 출고파일의 어제/그제 출고분이 로트에서 안 빠짐.
@@ -921,6 +944,7 @@
       ? "기초재고 기준일: " + state.baseline.setAt + " (" + state.baseline.fileName + ")"
       : "기초재고가 아직 설정되지 않았습니다";
     renderStock();
+    renderKpi();
     renderBatchList("outbound");
     renderBatchList("inbound");
   }
@@ -1059,6 +1083,88 @@
         '<button class="del-btn" data-kind="' + kind + '" data-id="' + b.id + '">삭제</button></div>';
     }).join("");
   }
+
+  // ---------- KPI 리포트 ----------
+  function ymd(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  function addDays(d, n) { var x = new Date(d); x.setDate(x.getDate() + n); return x; }
+  function pct(n) { return n === null ? "-" : Math.round(n * 100) + "%"; }
+
+  // 품목별 KPI. 출고 데이터는 기초재고 설정일 다음 날부터 쌓이므로 일평균은 "쌓인 일수(최대 30일)"로 나눔
+  // ponytail: 회전율은 기간 출고 ÷ 평균재고((기초+현재)/2) 단순식 - 일별 재고 이력이 생기면 일평균재고로 교체
+  function computeKpi() {
+    var baseDay = state.baseline ? new Date(state.baseline.setAt.slice(0, 10)) : new Date();
+    var dataDays = Math.max(1, Math.min(WARN_RISK_DAYS, Math.round((new Date(ymd(new Date())) - baseDay) / 86400000)));
+    var rows = computeStock()
+      .filter(function (i) { return (currentBrand === "all" || brandOf(i.name) === currentBrand) && (i.remaining > 0 || i.outbound > 0); })
+      .map(function (i) {
+        var period = dataDays >= WARN_RISK_DAYS ? i.recent30d : i.outbound;
+        var daily = period / dataDays;
+        var supply = i.baseline + i.inbound;
+        var avgStock = (i.baseline + Math.max(0, i.remaining)) / 2;
+        return {
+          name: i.name, barcode: i.barcode, week: i.recent7d, prevWeek: i.prev7d || 0,
+          change: i.prev7d ? (i.recent7d - i.prev7d) / i.prev7d : null,
+          daily: daily, remaining: i.remaining,
+          days: daily > 0 ? Math.max(0, i.remaining) / daily : null,
+          sellThrough: supply > 0 ? i.outbound / supply : null,
+          turnover: avgStock > 0 ? period / avgStock : null
+        };
+      });
+    rows.sort(function (a, b) { return b.week - a.week || b.daily - a.daily; });
+    return { rows: rows, dataDays: dataDays };
+  }
+
+  function renderKpi() {
+    var k = computeKpi(), rows = k.rows;
+    var today = new Date();
+    var sum = function (f) { return rows.reduce(function (s, r) { return s + f(r); }, 0); };
+    var week = sum(function (r) { return r.week; }), prevWeek = sum(function (r) { return r.prevWeek; });
+    var daily = sum(function (r) { return r.daily; }), stock = sum(function (r) { return Math.max(0, r.remaining); });
+    var lowDays = rows.filter(function (r) { return r.days !== null && r.days < 30; }).length;
+    var idle = rows.filter(function (r) { return r.daily === 0 && r.remaining > 0; }).length;
+    var card = function (label, value, sub, tone) {
+      var color = tone === "danger" ? "var(--danger)" : tone === "warn" ? "var(--warn)" : "var(--ink)";
+      return '<div class="stat" style="--tone:' + color + '"><div class="label">' + label + '</div><div class="value" style="color:' + color + '">' + value + '</div>' + (sub ? '<div class="sub">' + sub + "</div>" : "") + "</div>";
+    };
+    document.getElementById("kpi-stats").innerHTML =
+      card("이번주 출고", week.toLocaleString(), prevWeek ? "지난주 " + prevWeek.toLocaleString() + " (" + (week >= prevWeek ? "+" : "") + pct((week - prevWeek) / prevWeek) + ")" : "지난주 데이터 없음") +
+      card("일평균 출고", Math.round(daily).toLocaleString(), "최근 " + k.dataDays + "일 기준") +
+      card("평균 재고일수", daily > 0 ? Math.round(stock / daily) + "일" : "-", "총 현재고 " + stock.toLocaleString() + "개") +
+      card("재고 30일 미만", lowDays, "리오더 검토 품목", lowDays ? "danger" : "") +
+      card("정체재고", idle, "기간 내 출고 0 · 재고 있음", idle ? "warn" : "");
+    document.getElementById("kpi-period").textContent =
+      "이번주 " + ymd(addDays(today, -(STOCKOUT_RISK_DAYS - 1))) + " ~ " + ymd(today) + " · 지난주 " + ymd(addDays(today, -(STOCKOUT_RISK_DAYS * 2 - 1))) + " ~ " + ymd(addDays(today, -STOCKOUT_RISK_DAYS)) +
+      " · 소진율 = 누적출고 ÷ (기초재고+입고) · 회전율 = 기간 출고 ÷ 평균재고";
+    var tbody = document.getElementById("kpi-tbody");
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="9"><div class="empty">표시할 데이터가 없습니다.</div></td></tr>'; return; }
+    tbody.innerHTML = rows.map(function (r) {
+      var daysTone = r.days === null ? "" : r.days < 14 ? "danger" : r.days < 30 ? "warn" : "";
+      var changeColor = r.change === null ? "" : r.change >= 0 ? "var(--ok)" : "var(--danger)";
+      return "<tr>" +
+        '<td class="product-name">' + escapeHtml(r.name || r.barcode) + "</td>" +
+        '<td class="mono"><strong>' + r.week + "</strong></td>" +
+        '<td class="mono">' + r.prevWeek + "</td>" +
+        '<td class="mono" style="color:' + changeColor + '">' + (r.change === null ? "-" : (r.change >= 0 ? "+" : "") + pct(r.change)) + "</td>" +
+        '<td class="mono">' + r.daily.toFixed(1) + "</td>" +
+        '<td class="mono">' + r.remaining + "</td>" +
+        '<td class="mono">' + (r.days === null ? '<span class="pill neutral">출고없음</span>' : daysTone ? '<span class="pill ' + daysTone + '">' + Math.round(r.days) + "일</span>" : Math.round(r.days) + "일") + "</td>" +
+        '<td class="mono">' + pct(r.sellThrough) + "</td>" +
+        '<td class="mono">' + (r.turnover === null ? "-" : r.turnover.toFixed(2)) + "</td>" +
+        "</tr>";
+    }).join("");
+  }
+
+  document.getElementById("kpi-download").addEventListener("click", function () {
+    var rows = computeKpi().rows.map(function (r) {
+      var round = function (n, d) { return n === null ? "" : Math.round(n * Math.pow(10, d)) / Math.pow(10, d); };
+      return { "상품명": r.name, "바코드": r.barcode, "이번주 출고": r.week, "지난주 출고": r.prevWeek, "증감률": round(r.change, 3),
+        "일평균 출고": round(r.daily, 1), "현재고": r.remaining, "재고일수": round(r.days, 0), "소진율": round(r.sellThrough, 3), "회전율": round(r.turnover, 2) };
+    });
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "KPI");
+    var d = new Date();
+    XLSX.writeFile(wb, String(d.getFullYear()).slice(2) + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0") + "_재고트래커_KPI리포트_" + (currentBrand === "all" ? "전체" : currentBrand) + ".xlsx");
+  });
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; });
@@ -1218,6 +1324,7 @@
       btn.classList.add("active");
       currentBrand = btn.dataset.brand;
       renderStock();
+      renderKpi();
     });
   });
   document.querySelectorAll(".sort-chip").forEach(function (btn) {
