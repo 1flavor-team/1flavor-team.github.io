@@ -137,8 +137,11 @@
   }
   .stat::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--tone, var(--ink-faint)); opacity: .55; }
   .stat:hover { box-shadow: var(--shadow-lift); transform: translateY(-1px); }
-  div.stat { cursor: default; }
-  div.stat:hover { box-shadow: var(--shadow); transform: none; }
+  #kpi-head th { cursor: pointer; user-select: none; white-space: nowrap; }
+  #kpi-head th:hover { color: var(--accent); }
+  #kpi-head th.sorted { color: var(--accent); }
+  #kpi-head th.sorted::after { content: " ▼"; font-size: 9px; }
+  #kpi-head th.sorted.asc::after { content: " ▲"; }
   .stat .sub { font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; }
   .kpi-period { font-size: 12.5px; color: var(--ink-faint); }
   .stat .label { font-size: 11.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
@@ -365,13 +368,14 @@
     <section class="tab-panel" id="panel-kpi">
       <div class="stat-row" id="kpi-stats"></div>
       <div class="toolbar">
-        <span class="kpi-period" id="kpi-period"></span>
+        <input class="search-input" id="kpi-search" placeholder="상품명 또는 바코드 검색">
         <button class="filter-chip" id="kpi-download" style="margin-left:auto">엑셀 다운로드</button>
       </div>
+      <div class="kpi-period" id="kpi-period" style="margin:-6px 0 12px"></div>
       <div class="table-scroll">
         <table>
           <thead>
-            <tr><th>상품명</th><th>이번주 출고</th><th>지난주 출고</th><th>증감</th><th>일평균 출고</th><th>현재고</th><th>재고일수</th><th>소진율</th><th>회전율</th></tr>
+            <tr id="kpi-head"><th data-kpi-sort="name">상품명</th><th data-kpi-sort="week">이번주 출고</th><th data-kpi-sort="prevWeek">지난주 출고</th><th data-kpi-sort="change">증감</th><th data-kpi-sort="daily">일평균 출고</th><th data-kpi-sort="remaining">현재고</th><th data-kpi-sort="days">재고일수</th><th data-kpi-sort="sellThrough">소진율</th><th data-kpi-sort="turnover">회전율</th></tr>
           </thead>
           <tbody id="kpi-tbody"></tbody>
         </table>
@@ -1110,8 +1114,30 @@
           turnover: avgStock > 0 ? period / avgStock : null
         };
       });
-    rows.sort(function (a, b) { return b.week - a.week || b.daily - a.daily; });
     return { rows: rows, dataDays: dataDays };
+  }
+
+  // 표 보기 상태: 열 머리글 클릭 정렬, 검색, 요약카드 클릭 필터
+  var kpiSort = { key: "week", dir: -1 }, kpiSearch = "", kpiFilter = "all";
+  var KPI_FILTERS = {
+    low: function (r) { return r.days !== null && r.days < 30; },
+    idle: function (r) { return r.daily === 0 && r.remaining > 0; }
+  };
+  function kpiView(rows) {
+    var q = kpiSearch.toLowerCase();
+    var out = rows.filter(function (r) {
+      if (q && ((r.name || "") + r.barcode).toLowerCase().indexOf(q) === -1) return false;
+      return kpiFilter === "all" || KPI_FILTERS[kpiFilter](r);
+    });
+    var key = kpiSort.key, dir = kpiSort.dir;
+    out.sort(function (a, b) {
+      var x = a[key], y = b[key];
+      if (x === null && y === null) return 0;
+      if (x === null) return 1; // 값 없음(-)은 항상 맨 뒤
+      if (y === null) return -1;
+      return (key === "name" ? String(x).localeCompare(String(y), "ko") : x - y) * dir;
+    });
+    return out;
   }
 
   function renderKpi() {
@@ -1120,18 +1146,24 @@
     var sum = function (f) { return rows.reduce(function (s, r) { return s + f(r); }, 0); };
     var week = sum(function (r) { return r.week; }), prevWeek = sum(function (r) { return r.prevWeek; });
     var daily = sum(function (r) { return r.daily; }), stock = sum(function (r) { return Math.max(0, r.remaining); });
-    var lowDays = rows.filter(function (r) { return r.days !== null && r.days < 30; }).length;
-    var idle = rows.filter(function (r) { return r.daily === 0 && r.remaining > 0; }).length;
-    var card = function (label, value, sub, tone) {
+    var lowDays = rows.filter(KPI_FILTERS.low).length;
+    var idle = rows.filter(KPI_FILTERS.idle).length;
+    var card = function (filter, label, value, sub, tone) {
       var color = tone === "danger" ? "var(--danger)" : tone === "warn" ? "var(--warn)" : "var(--ink)";
-      return '<div class="stat" style="--tone:' + color + '"><div class="label">' + label + '</div><div class="value" style="color:' + color + '">' + value + '</div>' + (sub ? '<div class="sub">' + sub + "</div>" : "") + "</div>";
+      var active = filter !== "all" && kpiFilter === filter ? " active" : "";
+      return '<button type="button" class="stat' + active + '" data-kpi-filter="' + filter + '" style="--tone:' + color + '"><div class="label">' + label + '</div><div class="value" style="color:' + color + '">' + value + '</div>' + (sub ? '<div class="sub">' + sub + "</div>" : "") + "</button>";
     };
     document.getElementById("kpi-stats").innerHTML =
-      card("이번주 출고", week.toLocaleString(), prevWeek ? "지난주 " + prevWeek.toLocaleString() + " (" + (week >= prevWeek ? "+" : "") + pct((week - prevWeek) / prevWeek) + ")" : "지난주 데이터 없음") +
-      card("일평균 출고", Math.round(daily).toLocaleString(), "최근 " + k.dataDays + "일 기준") +
-      card("평균 재고일수", daily > 0 ? Math.round(stock / daily) + "일" : "-", "총 현재고 " + stock.toLocaleString() + "개") +
-      card("재고 30일 미만", lowDays, "리오더 검토 품목", lowDays ? "danger" : "") +
-      card("정체재고", idle, "기간 내 출고 0 · 재고 있음", idle ? "warn" : "");
+      card("all", "이번주 출고", week.toLocaleString(), prevWeek ? "지난주 " + prevWeek.toLocaleString() + " (" + (week >= prevWeek ? "+" : "") + pct((week - prevWeek) / prevWeek) + ")" : "지난주 데이터 없음") +
+      card("all", "일평균 출고", Math.round(daily).toLocaleString(), "최근 " + k.dataDays + "일 기준") +
+      card("all", "평균 재고일수", daily > 0 ? Math.round(stock / daily) + "일" : "-", "총 현재고 " + stock.toLocaleString() + "개") +
+      card("low", "재고 30일 미만", lowDays, "리오더 검토 품목 · 클릭해서 보기", lowDays ? "danger" : "") +
+      card("idle", "정체재고", idle, "기간 내 출고 0 · 클릭해서 보기", idle ? "warn" : "");
+    document.querySelectorAll("#kpi-head th").forEach(function (th) {
+      th.classList.toggle("sorted", th.dataset.kpiSort === kpiSort.key);
+      th.classList.toggle("asc", th.dataset.kpiSort === kpiSort.key && kpiSort.dir === 1);
+    });
+    rows = kpiView(rows);
     document.getElementById("kpi-period").textContent =
       "이번주 " + ymd(addDays(today, -(STOCKOUT_RISK_DAYS - 1))) + " ~ " + ymd(today) + " · 지난주 " + ymd(addDays(today, -(STOCKOUT_RISK_DAYS * 2 - 1))) + " ~ " + ymd(addDays(today, -STOCKOUT_RISK_DAYS)) +
       " · 소진율 = 누적출고 ÷ (기초재고+입고) · 회전율 = 기간 출고 ÷ 평균재고";
@@ -1149,19 +1181,40 @@
         '<td class="mono">' + r.remaining + "</td>" +
         '<td class="mono">' + (r.days === null ? '<span class="pill neutral">출고없음</span>' : daysTone ? '<span class="pill ' + daysTone + '">' + Math.round(r.days) + "일</span>" : Math.round(r.days) + "일") + "</td>" +
         '<td class="mono">' + pct(r.sellThrough) + "</td>" +
-        '<td class="mono">' + (r.turnover === null ? "-" : r.turnover.toFixed(2)) + "</td>" +
+        '<td class="mono">' + pct(r.turnover) + "</td>" +
         "</tr>";
     }).join("");
   }
 
+  document.getElementById("kpi-head").addEventListener("click", function (e) {
+    var th = e.target.closest("th[data-kpi-sort]");
+    if (!th) return;
+    var key = th.dataset.kpiSort;
+    // 같은 열 다시 누르면 방향 전환, 새 열은 상품명만 가나다순·나머지는 큰 값부터
+    kpiSort = kpiSort.key === key ? { key: key, dir: -kpiSort.dir } : { key: key, dir: key === "name" ? 1 : -1 };
+    renderKpi();
+  });
+  document.getElementById("kpi-search").addEventListener("input", function (e) { kpiSearch = e.target.value.trim(); renderKpi(); });
+  document.getElementById("kpi-stats").addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-kpi-filter]");
+    if (!btn) return;
+    var f = btn.dataset.kpiFilter;
+    kpiFilter = f === "all" || kpiFilter === f ? "all" : f; // 같은 카드 다시 누르면 해제
+    renderKpi();
+  });
+
   document.getElementById("kpi-download").addEventListener("click", function () {
-    var rows = computeKpi().rows.map(function (r) {
+    var rows = kpiView(computeKpi().rows).map(function (r) {
       var round = function (n, d) { return n === null ? "" : Math.round(n * Math.pow(10, d)) / Math.pow(10, d); };
       return { "상품명": r.name, "바코드": r.barcode, "이번주 출고": r.week, "지난주 출고": r.prevWeek, "증감률": round(r.change, 3),
-        "일평균 출고": round(r.daily, 1), "현재고": r.remaining, "재고일수": round(r.days, 0), "소진율": round(r.sellThrough, 3), "회전율": round(r.turnover, 2) };
+        "일평균 출고": round(r.daily, 1), "현재고": r.remaining, "재고일수": round(r.days, 0), "소진율": round(r.sellThrough, 3), "회전율": round(r.turnover, 3) };
     });
     var wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "KPI");
+    var ws = XLSX.utils.json_to_sheet(rows);
+    ["E", "I", "J"].forEach(function (col) { // 증감률·소진율·회전율 열을 % 서식으로
+      for (var i = 2; i <= rows.length + 1; i++) if (ws[col + i] && ws[col + i].t === "n") ws[col + i].z = "0%";
+    });
+    XLSX.utils.book_append_sheet(wb, ws, "KPI");
     var d = new Date();
     XLSX.writeFile(wb, String(d.getFullYear()).slice(2) + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0") + "_재고트래커_KPI리포트_" + (currentBrand === "all" ? "전체" : currentBrand) + ".xlsx");
   });
