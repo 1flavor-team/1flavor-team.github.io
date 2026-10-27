@@ -621,13 +621,15 @@
   // 일반 입고는 입고파일로 따로 반영하므로 여기선 안 씀(쓰면 이중계산).
   function parseLedger(rows) {
     var h = rows[0] || [];
-    var idx = { barcode: findCol(h, ["바코드"]), name: findCol(h, ["상품명"]), date: findCol(h, ["일자"]), out: findCol(h, ["출고"]), ship: findCol(h, ["배송"]), ret: findCol(h, ["반품입고"]) };
+    var idx = { barcode: findCol(h, ["바코드"]), name: findCol(h, ["상품명"]), date: findCol(h, ["일자"]), out: findCol(h, ["출고"]), ship: findCol(h, ["배송"]), ret: findCol(h, ["반품입고"]), retOut: findCol(h, ["반품출고"]) };
     if (idx.barcode === -1 || idx.date === -1 || idx.ship === -1) throw new Error("재고수불부 형식이 맞는지 확인해주세요 (바코드/일자/배송 컬럼을 못 찾음)");
     var out = [];
     for (var i = 1; i < rows.length; i++) {
       var r = rows[i], date = normalizeDateVal(r[idx.date]), barcode = r[idx.barcode];
       if (!date || !barcode) continue;
-      var qty = (Number(r[idx.ship]) || 0) + (idx.out !== -1 ? Number(r[idx.out]) || 0 : 0) - (idx.ret !== -1 ? Number(r[idx.ret]) || 0 : 0);
+      // 출고 = 배송 + 출고 + 반품출고(공급처로 반품) - 반품입고(고객 반품, 재고 +)
+      var col = function (k) { return idx[k] !== -1 ? Number(r[idx[k]]) || 0 : 0; };
+      var qty = col("ship") + col("out") + col("retOut") - col("ret");
       if (qty) out.push({ barcode: String(barcode).trim(), name: idx.name !== -1 ? String(r[idx.name] || "").trim() : "", qty: qty, date: date });
     }
     return out;
