@@ -369,13 +369,16 @@
       <div class="stat-row" id="kpi-stats"></div>
       <div class="toolbar">
         <input class="search-input" id="kpi-search" placeholder="상품명 또는 바코드 검색">
+        <button class="filter-chip unit-chip active" data-unit="ea">개</button>
+        <button class="filter-chip unit-chip" data-unit="box">박스</button>
+        <button class="filter-chip unit-chip" data-unit="pallet">파레트</button>
         <button class="filter-chip" id="kpi-download" style="margin-left:auto">엑셀 다운로드</button>
       </div>
       <div class="kpi-period" id="kpi-period" style="margin:-6px 0 12px"></div>
       <div class="table-scroll">
         <table>
           <thead>
-            <tr id="kpi-head"><th data-kpi-sort="name">상품명</th><th data-kpi-sort="week">이번주 출고</th><th data-kpi-sort="prevWeek">지난주 출고</th><th data-kpi-sort="change">증감</th><th data-kpi-sort="daily">일평균 출고</th><th data-kpi-sort="remaining">현재고</th><th data-kpi-sort="days">재고일수</th><th data-kpi-sort="sellThrough">소진율</th><th data-kpi-sort="turnover">회전율</th></tr>
+            <tr id="kpi-head"><th data-kpi-sort="name">상품명</th><th data-kpi-sort="pallet" title="박스 입수 / 파레트 입수">입수(박스/파레트)</th><th data-kpi-sort="week">이번주 출고</th><th data-kpi-sort="prevWeek">지난주 출고</th><th data-kpi-sort="change">증감</th><th data-kpi-sort="daily">일평균 출고</th><th data-kpi-sort="remaining">현재고</th><th data-kpi-sort="days">재고일수</th><th data-kpi-sort="sellThrough">소진율</th><th data-kpi-sort="turnover">회전율</th></tr>
           </thead>
           <tbody id="kpi-tbody"></tbody>
         </table>
@@ -673,8 +676,8 @@
   // 품목별 박스당 입수량(1박스 = 몇 개). 비고란에 "날짜(NN박스)" 형태로만 적힌 입고 수량을
   // 실제 개수로 환산할 때 사용 (바코드/품번 기준). "첫맛-박스입수.xlsx" 기준, 목록에 없는 품목은
   // 박스수만 참고로 표시되고 재고 수량 계산(개수 환산)에는 반영되지 않음.
-  var UNITS_PER_BOX = {"8809160222442":24,"8809160222350":24,"8809160222480":12,"8809160222428":12,"8809160224200":15,"8809160224026":12,"8809160224217":15,"8809160224033":12,"8809160224286":15,"8809160224040":12,"8809160224149":12,"8809160224316":15,"8809160224057":12,"8809160224347":15,"8809160224064":12,"8809160224354":15,"8809160224088":12,"8809160224361":15,"8809160224071":12,"8809160224156":15,"8809160223906":12,"8809160224095":12,"8809160224163":15,"8809160223920":12,"8809160224170":15,"8809160223012":15,"8809160223036":12,"8809160224187":15,"8809160224132":12,"8809160223937":12,"8809160224194":15,"8809160223043":15,"8809160223050":12,"8809160224224":15,"8809160223913":12,"8809160223944":12,"8809160224231":15,"8809160223111":15,"8809160223128":12,"8809160224101":12,"8809160224248":15,"8809160223951":12,"8809160224255":15,"8809160224262":15,"8809160223982":6,"8809160223968":12,"8809160224279":15,"8809160223999":12,"8809160224293":15,"8809160224118":12,"8809160224125":12,"8809160224309":15,"8809160224323":15,"8809160224002":12,"8809160224330":15,"8809160224019":12,"8809160222466":12,"8809160222299":1,"8809160222473":8,"8809160222923":8,"8809160223005":12,"8809160222725":1,"8809160222718":8,"8809160222336":24,"8809160222688":1,"8809160222671":8,"8809160223432":1,"8809160222640":8,"8809160223449":1,"8809160222633":8,"8809160222589":8,"8809160220578":12,"8809160223258":8,"8809160223265":1,"8809160223357":1,"8809160223340":8,"8809160222985":8,"8809160222992":1,"8809160222770":10,"8809160222763":20,"8809160222756":10,"8809160222749":20,"8809160222626":12,"8800368800005":20,"8809160222374":6,"8809160222787":1,"8809160222367":12,"8809160222558":12,"8809160222534":8,"8809160222497":12,"8809160222510":8,"8809160222503":8,"8809160222916":12,"8809160223173":8,"8809160222596":12,"8809160222619":1,"8809160222602":8,"8809160223203":1,"8809160223210":8,"8809160223227":1,"8809160223241":1,"8809160223234":8,"8809160223029":8,"8809160222404":1,"8809160222329":8,"8809160222381":1,"8809160222305":8,"8809160222572":12,"8809160222527":8,"8809160224378":20,"8809160223456":8,"8809160223098":8,"8809160222893":12,"8809160222411":8,"8809160222398":12,"8809160222459":10,"8809160223388":8,"8809160223067":8,"8809160223180":8,"8809160222961":8,"8809160222978":12,"8809160222954":8,"8809160223517":24,
-    "8809160222695":24,"8809160222695-1":24,"8809160222657":24,"8809160222657-1":24,"8809160223487":24,"8809160223500":24,"8809160223494":24,"8809160222435":24,"8800638800005":15,"8809160222343":24,"8809160222336-1":24,"8809160222312":24,"8809160222312-1":24,"8809160222909":8,"8809160221902":12};
+  var UNITS_PER_BOX = {"8809160222442":12,"8809160222350":12,"8809160222480":12,"8809160222428":12,"8809160224200":15,"8809160224026":12,"8809160224217":15,"8809160224033":12,"8809160224286":15,"8809160224040":12,"8809160224149":12,"8809160224316":15,"8809160224057":12,"8809160224347":15,"8809160224064":12,"8809160224354":15,"8809160224088":12,"8809160224361":15,"8809160224071":12,"8809160224156":15,"8809160223906":12,"8809160224095":12,"8809160224163":15,"8809160223920":12,"8809160224170":15,"8809160223012":15,"8809160223036":12,"8809160224187":15,"8809160224132":12,"8809160223937":12,"8809160224194":15,"8809160223043":15,"8809160223050":12,"8809160224224":15,"8809160223913":12,"8809160223944":12,"8809160224231":15,"8809160223111":15,"8809160223128":12,"8809160224101":12,"8809160224248":15,"8809160223951":12,"8809160224255":15,"8809160224262":15,"8809160223982":6,"8809160223968":12,"8809160224279":15,"8809160223999":12,"8809160224293":15,"8809160224118":12,"8809160224125":12,"8809160224309":15,"8809160224323":15,"8809160224002":12,"8809160224330":15,"8809160224019":12,"8809160222466":12,"8809160222299":1,"8809160222473":8,"8809160222923":8,"8809160223005":12,"8809160222725":1,"8809160222718":8,"8809160222336":24,"8809160222688":1,"8809160222671":8,"8809160223432":1,"8809160222640":8,"8809160223449":1,"8809160222633":8,"8809160222589":8,"8809160220578":12,"8809160223258":8,"8809160223265":1,"8809160223357":1,"8809160223340":8,"8809160222985":8,"8809160222992":1,"8809160222770":10,"8809160222763":20,"8809160222756":10,"8809160222749":20,"8809160222626":12,"8800368800005":20,"8809160222374":6,"8809160222787":1,"8809160222367":12,"8809160222558":12,"8809160222534":8,"8809160222497":12,"8809160222510":8,"8809160222503":8,"8809160222916":12,"8809160223173":8,"8809160222596":12,"8809160222619":1,"8809160222602":8,"8809160223203":1,"8809160223210":8,"8809160223227":1,"8809160223241":1,"8809160223234":8,"8809160223029":8,"8809160222404":1,"8809160222329":8,"8809160222381":1,"8809160222305":8,"8809160222572":12,"8809160222527":8,"8809160224378":20,"8809160223456":8,"8809160223098":8,"8809160222893":12,"8809160222411":8,"8809160222398":12,"8809160222459":10,"8809160223388":8,"8809160223067":8,"8809160223180":8,"8809160222961":8,"8809160222978":12,"8809160222954":8,"8809160223517":24,
+    "8809160222695":24,"8809160222695-1":12,"8809160222657":24,"8809160222657-1":12,"8809160223487":24,"8809160223500":24,"8809160223494":24,"8809160222435":24,"8800638800005":20,"8809160222343":24,"8809160222336-1":12,"8809160222312":24,"8809160222312-1":12,"8809160222909":8,"8809160221902":12};
 
   function parseInbound(wb) {
     var sheetName = wb.SheetNames.indexOf("전체 입고 수량") !== -1 ? "전체 입고 수량" : wb.SheetNames[0];
@@ -1093,6 +1096,28 @@
   function addDays(d, n) { var x = new Date(d); x.setDate(x.getDate() + n); return x; }
   function pct(n) { return n === null ? "-" : Math.round(n * 100) + "%"; }
 
+  // 박스·파레트 입수량(2026-10-27 부영님 기준). 박스는 UNITS_PER_BOX(바코드별) 우선, 없으면 용량 규칙.
+  // 저스톡은 소형(박스 15)/중형(박스 12)이 용기 기준이라 UNITS_PER_BOX 값으로 구분.
+  function packingOf(name, barcode) {
+    var n = String(name || "");
+    if (/선물세트|금실면/.test(n)) return { box: null, pallet: null };
+    var m = n.match(/([\d.]+)\s*(kg|g)/i);
+    var g = m ? parseFloat(m[1]) * (m[2].toLowerCase() === "kg" ? 1000 : 1) : null;
+    var box = UNITS_PER_BOX[barcode] || null, pallet = null;
+    if (isNoExpiry(n)) {
+      pallet = box === 15 ? 1575 : box === 12 ? 780 : null; // 월계수잎 230g(박스 6)은 파레트 미정
+    } else if (g !== null && g >= 100) {
+      if (/분말/.test(n)) {
+        if (!box) box = g <= 600 ? 20 : 10;
+        pallet = /캡사이신/.test(n) && g === 400 ? 1260 : g <= 600 ? 1200 : 600;
+      } else {
+        if (!box) box = g <= 460 ? 24 : g <= 1200 ? 12 : g <= 2200 ? 8 : 1;
+        pallet = /캡사이신/.test(n) && g === 550 ? 1260 : g <= 460 ? 1728 : g <= 600 ? 1440 : g <= 1200 ? 780 : g <= 2200 ? 384 : 75;
+      }
+    }
+    return { box: box, pallet: pallet };
+  }
+
   // 품목별 KPI. 출고 데이터는 기초재고 설정일 다음 날부터 쌓이므로 일평균은 "쌓인 일수(최대 30일)"로 나눔
   // ponytail: 회전율은 기간 출고 ÷ 평균재고((기초+현재)/2) 단순식 - 일별 재고 이력이 생기면 일평균재고로 교체
   function computeKpi() {
@@ -1105,8 +1130,9 @@
         var daily = period / dataDays;
         var supply = i.baseline + i.inbound;
         var avgStock = (i.baseline + Math.max(0, i.remaining)) / 2;
+        var pk = packingOf(i.name, i.barcode);
         return {
-          name: i.name, barcode: i.barcode, week: i.recent7d, prevWeek: i.prev7d || 0,
+          name: i.name, barcode: i.barcode, box: pk.box, pallet: pk.pallet, week: i.recent7d, prevWeek: i.prev7d || 0,
           change: i.prev7d ? (i.recent7d - i.prev7d) / i.prev7d : null,
           daily: daily, remaining: i.remaining,
           days: daily > 0 ? Math.max(0, i.remaining) / daily : null,
@@ -1118,7 +1144,20 @@
   }
 
   // 표 보기 상태: 열 머리글 클릭 정렬, 검색, 요약카드 클릭 필터
-  var kpiSort = { key: "week", dir: -1 }, kpiSearch = "", kpiFilter = "all";
+  var kpiSort = { key: "week", dir: -1 }, kpiSearch = "", kpiFilter = "all", kpiUnit = "ea";
+  var QTY_KEYS = ["week", "prevWeek", "daily", "remaining"];
+  var UNIT_LABEL = { ea: "개", box: "박스", pallet: "파레트" };
+  // 수량을 선택한 단위(개/박스/파레트)로 환산. 입수량 모르는 품목은 null(-)
+  function conv(r, key) {
+    if (kpiUnit === "ea") return r[key];
+    var per = r[kpiUnit];
+    return per ? r[key] / per : null;
+  }
+  function fmtQty(n, isDaily) {
+    if (n === null) return "-";
+    if (kpiUnit === "ea") return isDaily ? n.toFixed(1) : Math.round(n).toLocaleString();
+    return n.toFixed(kpiUnit === "box" ? 1 : 2);
+  }
   var KPI_FILTERS = {
     low: function (r) { return r.days !== null && r.days < 30; },
     idle: function (r) { return r.daily === 0 && r.remaining > 0; }
@@ -1131,7 +1170,7 @@
     });
     var key = kpiSort.key, dir = kpiSort.dir;
     out.sort(function (a, b) {
-      var x = a[key], y = b[key];
+      var x = QTY_KEYS.indexOf(key) !== -1 ? conv(a, key) : a[key], y = QTY_KEYS.indexOf(key) !== -1 ? conv(b, key) : b[key];
       if (x === null && y === null) return 0;
       if (x === null) return 1; // 값 없음(-)은 항상 맨 뒤
       if (y === null) return -1;
@@ -1143,9 +1182,13 @@
   function renderKpi() {
     var k = computeKpi(), rows = k.rows;
     var today = new Date();
-    var sum = function (f) { return rows.reduce(function (s, r) { return s + f(r); }, 0); };
-    var week = sum(function (r) { return r.week; }), prevWeek = sum(function (r) { return r.prevWeek; });
-    var daily = sum(function (r) { return r.daily; }), stock = sum(function (r) { return Math.max(0, r.remaining); });
+    // 박스·파레트 단위일 때 요약 합계는 입수량 아는 품목만 더함
+    var sum = function (key) { return rows.reduce(function (s, r) { var v = conv(r, key); return v === null ? s : s + (key === "remaining" ? Math.max(0, v) : v); }, 0); };
+    var unknown = kpiUnit === "ea" ? 0 : rows.filter(function (r) { return !r[kpiUnit]; }).length;
+    var u = UNIT_LABEL[kpiUnit], unknownNote = unknown ? " · 입수 미등록 " + unknown + "품목 제외" : "";
+    var week = sum("week"), prevWeek = sum("prevWeek"), daily = sum("daily"), stock = sum("remaining");
+    // 재고일수는 단위와 무관하게 전 품목 개수 기준(박스 환산 시 품목이 빠져 값이 흔들리지 않게)
+    var rawDaily = rows.reduce(function (s, r) { return s + r.daily; }, 0), rawStock = rows.reduce(function (s, r) { return s + Math.max(0, r.remaining); }, 0);
     var lowDays = rows.filter(KPI_FILTERS.low).length;
     var idle = rows.filter(KPI_FILTERS.idle).length;
     var card = function (filter, label, value, sub, tone) {
@@ -1154,9 +1197,9 @@
       return '<button type="button" class="stat' + active + '" data-kpi-filter="' + filter + '" style="--tone:' + color + '"><div class="label">' + label + '</div><div class="value" style="color:' + color + '">' + value + '</div>' + (sub ? '<div class="sub">' + sub + "</div>" : "") + "</button>";
     };
     document.getElementById("kpi-stats").innerHTML =
-      card("all", "이번주 출고", week.toLocaleString(), prevWeek ? "지난주 " + prevWeek.toLocaleString() + " (" + (week >= prevWeek ? "+" : "") + pct((week - prevWeek) / prevWeek) + ")" : "지난주 데이터 없음") +
-      card("all", "일평균 출고", Math.round(daily).toLocaleString(), "최근 " + k.dataDays + "일 기준") +
-      card("all", "평균 재고일수", daily > 0 ? Math.round(stock / daily) + "일" : "-", "총 현재고 " + stock.toLocaleString() + "개") +
+      card("all", "이번주 출고(" + u + ")", fmtQty(week), (prevWeek ? "지난주 " + fmtQty(prevWeek) + " (" + (week >= prevWeek ? "+" : "") + pct((week - prevWeek) / prevWeek) + ")" : "지난주 데이터 없음") + unknownNote) +
+      card("all", "일평균 출고(" + u + ")", fmtQty(daily), "최근 " + k.dataDays + "일 기준" + unknownNote) +
+      card("all", "평균 재고일수", rawDaily > 0 ? Math.round(rawStock / rawDaily) + "일" : "-", "총 현재고 " + fmtQty(stock) + u + unknownNote) +
       card("low", "재고 30일 미만", lowDays, "리오더 검토 품목 · 클릭해서 보기", lowDays ? "danger" : "") +
       card("idle", "정체재고", idle, "기간 내 출고 0 · 클릭해서 보기", idle ? "warn" : "");
     document.querySelectorAll("#kpi-head th").forEach(function (th) {
@@ -1168,17 +1211,18 @@
       "이번주 " + ymd(addDays(today, -(STOCKOUT_RISK_DAYS - 1))) + " ~ " + ymd(today) + " · 지난주 " + ymd(addDays(today, -(STOCKOUT_RISK_DAYS * 2 - 1))) + " ~ " + ymd(addDays(today, -STOCKOUT_RISK_DAYS)) +
       " · 소진율 = 누적출고 ÷ (기초재고+입고) · 회전율 = 기간 출고 ÷ 평균재고";
     var tbody = document.getElementById("kpi-tbody");
-    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="9"><div class="empty">표시할 데이터가 없습니다.</div></td></tr>'; return; }
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="10"><div class="empty">표시할 데이터가 없습니다.</div></td></tr>'; return; }
     tbody.innerHTML = rows.map(function (r) {
       var daysTone = r.days === null ? "" : r.days < 14 ? "danger" : r.days < 30 ? "warn" : "";
       var changeColor = r.change === null ? "" : r.change >= 0 ? "var(--ok)" : "var(--danger)";
       return "<tr>" +
         '<td class="product-name">' + escapeHtml(r.name || r.barcode) + "</td>" +
-        '<td class="mono"><strong>' + r.week + "</strong></td>" +
-        '<td class="mono">' + r.prevWeek + "</td>" +
+        '<td class="mono" style="color:var(--ink-faint)">' + (r.box || "-") + " / " + (r.pallet || "-") + "</td>" +
+        '<td class="mono"><strong>' + fmtQty(conv(r, "week")) + "</strong></td>" +
+        '<td class="mono">' + fmtQty(conv(r, "prevWeek")) + "</td>" +
         '<td class="mono" style="color:' + changeColor + '">' + (r.change === null ? "-" : (r.change >= 0 ? "+" : "") + pct(r.change)) + "</td>" +
-        '<td class="mono">' + r.daily.toFixed(1) + "</td>" +
-        '<td class="mono">' + r.remaining + "</td>" +
+        '<td class="mono">' + fmtQty(conv(r, "daily"), true) + "</td>" +
+        '<td class="mono">' + fmtQty(conv(r, "remaining")) + "</td>" +
         '<td class="mono">' + (r.days === null ? '<span class="pill neutral">출고없음</span>' : daysTone ? '<span class="pill ' + daysTone + '">' + Math.round(r.days) + "일</span>" : Math.round(r.days) + "일") + "</td>" +
         '<td class="mono">' + pct(r.sellThrough) + "</td>" +
         '<td class="mono">' + pct(r.turnover) + "</td>" +
@@ -1195,6 +1239,14 @@
     renderKpi();
   });
   document.getElementById("kpi-search").addEventListener("input", function (e) { kpiSearch = e.target.value.trim(); renderKpi(); });
+  document.querySelectorAll(".unit-chip").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.querySelectorAll(".unit-chip").forEach(function (b) { b.classList.remove("active"); });
+      btn.classList.add("active");
+      kpiUnit = btn.dataset.unit;
+      renderKpi();
+    });
+  });
   document.getElementById("kpi-stats").addEventListener("click", function (e) {
     var btn = e.target.closest("[data-kpi-filter]");
     if (!btn) return;
@@ -1206,12 +1258,18 @@
   document.getElementById("kpi-download").addEventListener("click", function () {
     var rows = kpiView(computeKpi().rows).map(function (r) {
       var round = function (n, d) { return n === null ? "" : Math.round(n * Math.pow(10, d)) / Math.pow(10, d); };
-      return { "상품명": r.name, "바코드": r.barcode, "이번주 출고": r.week, "지난주 출고": r.prevWeek, "증감률": round(r.change, 3),
-        "일평균 출고": round(r.daily, 1), "현재고": r.remaining, "재고일수": round(r.days, 0), "소진율": round(r.sellThrough, 3), "회전율": round(r.turnover, 3) };
+      var u = "(" + UNIT_LABEL[kpiUnit] + ")", dq = kpiUnit === "pallet" ? 2 : 1;
+      var o = { "상품명": r.name, "바코드": r.barcode, "박스입수": r.box || "", "파레트입수": r.pallet || "" };
+      o["이번주 출고" + u] = round(conv(r, "week"), dq); o["지난주 출고" + u] = round(conv(r, "prevWeek"), dq); o["증감률"] = round(r.change, 3);
+      o["일평균 출고" + u] = round(conv(r, "daily"), 2); o["현재고" + u] = round(conv(r, "remaining"), dq);
+      o["재고일수"] = round(r.days, 0); o["소진율"] = round(r.sellThrough, 3); o["회전율"] = round(r.turnover, 3);
+      return o;
     });
     var wb = XLSX.utils.book_new();
     var ws = XLSX.utils.json_to_sheet(rows);
-    ["E", "I", "J"].forEach(function (col) { // 증감률·소진율·회전율 열을 % 서식으로
+    var heads = rows.length ? Object.keys(rows[0]) : [];
+    ["증감률", "소진율", "회전율"].forEach(function (h) { // % 서식
+      var col = XLSX.utils.encode_col(heads.indexOf(h));
       for (var i = 2; i <= rows.length + 1; i++) if (ws[col + i] && ws[col + i].t === "n") ws[col + i].z = "0%";
     });
     XLSX.utils.book_append_sheet(wb, ws, "KPI");
