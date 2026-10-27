@@ -873,6 +873,9 @@
         v.lotSum = v.expiries.reduce(function (s, e) { return s + (e.qty || 0); }, 0);
         // 수정필요: 현재고와 소비기한 로트 합계가 다른 품목(저스톡 제외). 재고 0이고 로트도 없으면 정상.
         v.needFix = brandOf(v.name) !== "저스톡" && v.lotSum !== v.remaining && !(v.remaining <= 0 && v.lotSum === 0);
+        // 저스톡·향신료는 소비기한이 없어 날짜가 제조일로 들어옴 - 소비기한 표시·임박 집계에서 제외
+        v.noExpiry = isNoExpiry(v.name);
+        if (v.noExpiry) { v.expiries = []; v.nearestExpiryDays = null; v.needFix = false; }
         return v;
       });
     if (currentSort === "expiry") {
@@ -903,6 +906,8 @@
     return { cls: "neutral", label: "정상" };
   }
   var JUSTOK_EXTRA_NAMES = ["양꼬치시즈닝"]; // 이름에 "저스톡"이 없지만 저스톡 브랜드로 분류할 품목
+  var NO_EXPIRY_RE = /시즈닝|스파이스|생강맛분말/; // 저스톡 외 향신료(소비기한 없음)
+  function isNoExpiry(name) { return brandOf(name) === "저스톡" || NO_EXPIRY_RE.test(String(name || "")); }
   function brandOf(name) {
     var n = String(name || "");
     if (n.indexOf("저스톡") !== -1) return "저스톡";
@@ -955,7 +960,9 @@
     }
     tbody.innerHTML = filtered.map(function (item) {
       var expiryPill;
-      if (item.expiries && item.expiries.length) {
+      if (item.noExpiry) {
+        expiryPill = '<span class="pill neutral" title="소비기한 없음(제조일 관리)">-</span>';
+      } else if (item.expiries && item.expiries.length) {
         // 로트별 tier를 한 번만 계산해서 pill과 비율바 둘 다에 씀
         var lotsWithTier = item.expiries.map(function (lot) { return { lot: lot, tier: expiryTier(expiryDays(lot.date)) }; });
         var lotTotalQty = lotsWithTier.reduce(function (s, x) { return s + (x.lot.qty || 0); }, 0) || 1;
@@ -980,7 +987,7 @@
         var gap = item.remaining - item.lotSum;
         expiryPill = '<div><span class="pill danger" title="현재고 ' + item.remaining + ' / 소비기한 합계 ' + item.lotSum + '">수정필요 · 소비기한 합 ' + item.lotSum + ' / 현재고 ' + item.remaining + ' (' + (gap > 0 ? '+' : '') + gap + ')</span></div>' + expiryPill;
       }
-      expiryPill += '<button type="button" class="edit-expiry-link" data-edit-expiry="' + item.barcode + '">수정</button>';
+      if (!item.noExpiry) expiryPill += '<button type="button" class="edit-expiry-link" data-edit-expiry="' + item.barcode + '">수정</button>';
       var statusLabel = item.status === "warn" ? "경고(수요)"
         : item.status !== "danger" ? "정상"
         : (item.remaining <= 0 ? "품절" : item.stockoutRisk && !(item.dangerQty > 0 && item.remaining <= item.dangerQty) ? "품절위험(수요)" : "위험");
